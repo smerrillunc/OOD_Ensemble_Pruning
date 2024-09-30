@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN, MeanShift, SpectralClustering
-#from sklearn.mixture import GMM
+from sklearn import mixture
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
 from scipy.cluster import hierarchy
@@ -61,7 +61,8 @@ class Clustering:
         :return: Cluster labels.
         """
         mean_shift = MeanShift()
-        self.labels = mean_shift.fit_predict(self.data)
+        mean_shift.fit(self.data)
+        self.labels = mean_shift.predict(self.data)
         return self.labels
 
     def gaussian_mixture(self, n_components=3):
@@ -70,8 +71,9 @@ class Clustering:
         :param n_components: The number of mixture components.
         :return: Cluster labels.
         """
-        gmm = GMM(n_components=n_components)
-        self.labels = gmm.fit_predict(self.data)
+        gmm = mixture.GaussianMixture(n_components=n_components)
+        gmm.fit(self.data)
+        self.labels = gmm.predict(self.data)
         return self.labels
 
     def spectral_clustering(self, n_clusters=3):

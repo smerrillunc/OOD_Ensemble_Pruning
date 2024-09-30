@@ -80,7 +80,10 @@ class EnsembleDiversity:
         """Calculate AUC for each individual tree."""
         aucs = []
         for pred in self.predictions:
-            auc = roc_auc_score(self.y_true, pred)
+            try:
+                auc = roc_auc_score(self.y_true, pred)
+            except:
+                auc = np.nan
             aucs.append(auc)
         return aucs
 

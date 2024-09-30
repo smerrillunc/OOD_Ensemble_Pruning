@@ -9,6 +9,7 @@ from sklearn.metrics import (
     log_loss,
     confusion_matrix
 )
+import numpy as np
 
 class EnsembleMetrics:
     def __init__(self, true_labels, predictions, probabilities=None):
@@ -30,7 +31,10 @@ class EnsembleMetrics:
 
     def auc(self):
         if self.probabilities is not None:
-            return roc_auc_score(self.true_labels, self.probabilities)
+            try:
+                return roc_auc_score(self.true_labels, self.probabilities)
+            except:
+                return np.nan
         else:
             raise ValueError("Probabilities must be provided for AUC calculation.")
 
@@ -42,7 +46,10 @@ class EnsembleMetrics:
 
     def log_loss(self):
         if self.probabilities is not None:
-            return log_loss(self.true_labels, self.probabilities)
+            try:
+                return log_loss(self.true_labels, self.probabilities)
+            except:
+                return np.nan
         else:
             raise ValueError("Probabilities must be provided for log loss calculation.")
 

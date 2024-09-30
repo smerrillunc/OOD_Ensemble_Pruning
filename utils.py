@@ -12,6 +12,8 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from scipy.integrate import trapezoid
 from joblib import load, dump
 from time import sleep
+from EnsembleMetrics import EnsembleMetrics
+from EnsembleDiversity import EnsembleDiversity
 
 def get_dataset(dataset_path, dataset_name):
     """
@@ -231,6 +233,93 @@ def plot_precision_recall(precisions_df, recalls_df, mp_precision, mp_recall, be
     
     return ax
 
+def compute_metrics_in_buckets(predictions, model_preds, probabilities, labels, buckets):
+    """
+    Computes various metrics (accuracy, precision, recall, f1, auc, etc.) for each bucket.
+
+    Args:
+    predictions (list or np.array): Ensemble predicted labels from the model.
+    model_preds: predictions for each model (for diversity metrics)
+    labels (list or np.array): The ground truth labels.
+    buckets (list or np.array): List defining the bucket for each data point.
+    probabilities (list or np.array, optional): Predicted probabilities for AUC and log loss.
+
+    Returns:
+    output: A df with max, min, mean, std of metrics based on passed clusters
+    """
+    
+    # Convert inputs to numpy arrays for efficient operations
+    predictions = np.array(predictions)
+    labels = np.array(labels)
+    buckets = np.array(buckets)
+    probabilities = np.array(probabilities) if probabilities is not None else None
+    
+    # Get unique buckets
+    unique_buckets = np.unique(buckets)
+    
+    # Dictionary to store the metrics for each bucket
+    bucket_metrics = {}
+
+    # Iterate over each unique bucket
+    for bucket in unique_buckets:
+        # Get the indices of the data points in this bucket
+        bucket_indices = np.where(buckets == bucket)[0]
+        
+        if len(bucket_indices) < 10:
+            # minimum bucket size
+            continue
+
+        # Extract predictions, labels, and probabilities (if available) for this bucket
+        bucket_predictions = predictions[bucket_indices]
+        bucket_labels = labels[bucket_indices]
+        bucket_probabilities = probabilities[bucket_indices] if probabilities is not None else None
+        bucket_model_preds = model_preds[:, bucket_indices]
+
+        # Create an EnsembleMetrics instance for this bucket
+        metrics = EnsembleMetrics(bucket_labels, bucket_predictions, bucket_probabilities)
+        diversity = EnsembleDiversity(bucket_labels, bucket_model_preds)
+
+        # Compute all metrics for this bucket and store them in a dictionary
+        bucket_metrics[bucket] = {
+            'accuracy': metrics.accuracy(),
+            'precision': metrics.precision(),
+            'recall': metrics.recall(),
+            'f1': metrics.f1(),
+            'auc': metrics.auc() if bucket_probabilities is not None else None,
+            'mean_absolute_error': metrics.mean_absolute_error(),
+            'mean_squared_error': metrics.mean_squared_error(),
+            'log_loss': metrics.log_loss() if bucket_probabilities is not None else None,
+            #'confusion_matrix': metrics.confusion_matrix().tolist()  # Convert numpy array to list for readability
+
+            # diversity metrics
+           'q_statistic':np.mean(diversity.q_statistic()),
+           'correlation_coefficient':np.mean(diversity.correlation_coefficient()),
+           'entropy':np.mean(diversity.entropy()),
+           'diversity_measure':diversity.diversity_measure(),
+           'hamming_distance':np.mean(diversity.hamming_distance()),
+           'error_rate':np.mean(diversity.error_rate()),
+           'auc':np.mean(diversity.auc()),
+           'brier_score':np.mean(diversity.brier_score()),
+           'ensemble_variance':np.mean(diversity.ensemble_variance()),
+        }
+
+    tmp = pd.DataFrame(bucket_metrics).T
+
+    output = pd.DataFrame()
+    for col in tmp.columns:
+        col_max = tmp[col].max()
+        col_min = tmp[col].min()
+        col_mean = tmp[col].mean()
+        col_std = tmp[col].std()
+
+        col_row = pd.DataFrame({f'max':col_max,
+         f'min':col_min,
+         f'mean':col_mean,
+         f'std':col_std,
+        }, index=[col])
+        output = pd.concat([output, col_row])
+    return output
+
 def plot_aroc_at_curve(AUCTHRESHS, aucs_df, mp_aucs, best_fitness_index={}, ax=None):
     if ax is None:
         fig, ax = plt.subplots()  # Create an axis if none is provided
@@ -282,3 +371,34 @@ def fitness_scatter(fitness_df, aucs_df, col, ax=None):
     ax.legend(loc='best')
     
     return ax
+
+def compute_cluster_metrics(clusters_dict, y_train, train_preds, train_pred_probs, y_val_id, val_preds, val_pred_probs, train_model_preds, val_model_preds):
+    """
+    Description: Get all metrics for clustered data
+    
+    """
+    
+    output = pd.DataFrame()
+    
+    for prefix, labels in clusters_dict.items():
+        if 'train' in prefix:
+            tmp = compute_metrics_in_buckets(train_preds, train_model_preds, train_pred_probs[:,1], y_train, labels)
+        else:
+            tmp = compute_metrics_in_buckets(val_preds, val_model_preds, val_pred_probs[:,1], y_val_id, labels)
+            
+        output = pd.concat([output, flatten_df(tmp, prefix)], axis=1)
+    
+    return output
+
+def flatten_df(df, prefix):
+    """
+    Descriptions: Flattens df which is a matrix to a single row
+    """
+    df_flattened = pd.DataFrame(df.T.unstack()).T
+
+    # Rename the columns by combining index name and column name
+    df_flattened.columns = [f"{prefix}_{idx}_{col}" for idx, col in df_flattened.columns]
+
+    # Reset the index for a clean DataFrame view
+    df_flattened.reset_index(drop=True, inplace=True)
+    return df_flattened
