@@ -272,7 +272,8 @@ def compute_metrics_in_buckets(predictions, model_preds, probabilities, labels, 
         # Extract predictions, labels, and probabilities (if available) for this bucket
         bucket_predictions = predictions[bucket_indices]
         bucket_labels = labels[bucket_indices]
-        bucket_probabilities = probabilities[bucket_indices] if probabilities is not None else None
+
+        bucket_probabilities = probabilities[:,bucket_indices] if probabilities is not None else None
         bucket_model_preds = model_preds[:, bucket_indices]
 
         # Create an EnsembleMetrics instance for this bucket
@@ -281,14 +282,14 @@ def compute_metrics_in_buckets(predictions, model_preds, probabilities, labels, 
 
         # Compute all metrics for this bucket and store them in a dictionary
         bucket_metrics[bucket] = {
-            'accuracy': metrics.accuracy(),
-            'precision': metrics.precision(),
-            'recall': metrics.recall(),
+            'acc': metrics.accuracy(),
+            'prec': metrics.precision(),
+            'rec': metrics.recall(),
             'f1': metrics.f1(),
             'auc': metrics.auc() if bucket_probabilities is not None else None,
-            'mean_absolute_error': metrics.mean_absolute_error(),
-            'mean_squared_error': metrics.mean_squared_error(),
-            'log_loss': metrics.log_loss() if bucket_probabilities is not None else None,
+            'mae': metrics.mean_absolute_error(),
+            'mse': metrics.mean_squared_error(),
+            'logloss': metrics.log_loss() if bucket_probabilities is not None else None,
             #'confusion_matrix': metrics.confusion_matrix().tolist()  # Convert numpy array to list for readability
 
             # diversity metrics
@@ -319,6 +320,7 @@ def compute_metrics_in_buckets(predictions, model_preds, probabilities, labels, 
         }, index=[col])
         output = pd.concat([output, col_row])
     return output
+
 
 def plot_aroc_at_curve(AUCTHRESHS, aucs_df, mp_aucs, best_fitness_index={}, ax=None):
     if ax is None:
@@ -372,7 +374,7 @@ def fitness_scatter(fitness_df, aucs_df, col, ax=None):
     
     return ax
 
-def compute_cluster_metrics(clusters_dict, y_train, train_preds, train_pred_probs, y_val_id, val_preds, val_pred_probs, train_model_preds, val_model_preds):
+def compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y):
     """
     Description: Get all metrics for clustered data
     
@@ -381,11 +383,7 @@ def compute_cluster_metrics(clusters_dict, y_train, train_preds, train_pred_prob
     output = pd.DataFrame()
     
     for prefix, labels in clusters_dict.items():
-        if 'train' in prefix:
-            tmp = compute_metrics_in_buckets(train_preds, train_model_preds, train_pred_probs[:,1], y_train, labels)
-        else:
-            tmp = compute_metrics_in_buckets(val_preds, val_model_preds, val_pred_probs[:,1], y_val_id, labels)
-            
+        tmp = compute_metrics_in_buckets(ensemble_preds, model_preds, model_pred_probs[:,:,1], Y, labels)
         output = pd.concat([output, flatten_df(tmp, prefix)], axis=1)
     
     return output
@@ -402,3 +400,27 @@ def flatten_df(df, prefix):
     # Reset the index for a clean DataFrame view
     df_flattened.reset_index(drop=True, inplace=True)
     return df_flattened
+
+def get_categorical_and_float_features(data, unique_threshold=10):
+    """
+    Separate categorical and float features based on the number of unique values.
+    
+    - data: numpy array (rows: samples, cols: features)
+    - unique_threshold: max number of unique values to consider a feature as categorical
+    
+    Returns:
+    - categorical_features: list of indices for categorical features
+    - float_features: list of indices for float (continuous) features
+    """
+    categorical_features = []
+    float_features = []
+
+    # Iterate over each column
+    for col in range(data.shape[1]):
+        unique_values = np.unique(data[:, col])
+        if len(unique_values) <= unique_threshold:
+            categorical_features.append(col)  # Consider it categorical if the unique values are below the threshold
+        else:
+            float_features.append(col)  # Otherwise, it's treated as a float/continuous feature
+
+    return categorical_features, float_features
