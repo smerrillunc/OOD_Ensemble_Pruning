@@ -17,6 +17,8 @@ from EnsembleDiversity import EnsembleDiversity
 from Clustering import Clustering
 from DataNoiseAdder import DataNoiseAdder
 
+import pickle
+
 def get_dataset(dataset_path, dataset_name):
     """
     Description: Retrieve a chosen dataset
@@ -430,52 +432,65 @@ def get_categorical_and_float_features(data, unique_threshold=10):
     return categorical_features, float_features
 
 
-def get_clusters_dict(x_train, x_val_id, clusters_list):
+def get_clusters_dict(x_train, x_val_id, clusters_list, save_path):
     clusters_dict = {}
-    
-    clustering_train = Clustering(x_train)
-    clustering_val = Clustering(x_val_id)
 
-    """
-    for num_clusters in clusters_list:
-        kmean_labels = clustering_train.k_means(n_clusters=num_clusters)
-        hier_labels = clustering_train.hierarchical_clustering(n_clusters=num_clusters)
-        gmm_labels = clustering_train.gaussian_mixture(n_components=num_clusters)
-        spectral_labels = clustering_train.spectral_clustering(n_clusters=num_clusters)
-        clusters_dict[prefix + f'kmeans_{num_clusters}_train'] = kmean_labels
-        clusters_dict[f'hier_{num_clusters}_train'] = hier_labels
-        clusters_dict[f'gmm_{num_clusters}_train'] = gmm_labels
-        clusters_dict[f'spectral_{num_clusters}_train'] = spectral_labels
+    # Check if the file with saved labels already exists
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as f:
+            clusters_dict = pickle.load(f)
+            print("Loaded labels from pickle file.")
+    else:
+        print("No saved labels found. Performing clustering...")
+        clustering_train = Clustering(x_train)
+        clustering_val = Clustering(x_val_id)
 
-    for num_clusters in clusters_list:
-        kmean_labels = clustering_val.k_means(n_clusters=num_clusters)
-        hier_labels = clustering_val.hierarchical_clustering(n_clusters=num_clusters)
-        gmm_labels = clustering_val.gaussian_mixture(n_components=num_clusters)
-        spectral_labels = clustering_val.spectral_clustering(n_clusters=num_clusters)
-        clusters_dict[f'kmeans_{num_clusters}_val'] = kmean_labels
-        clusters_dict[f'hier_{num_clusters}_val'] = hier_labels
-        clusters_dict[f'gmm_{num_clusters}_val'] = gmm_labels
-        clusters_dict[f'spectral_{num_clusters}_val'] = spectral_labels
+        # Perform clustering for the specified number of clusters in clusters_list
+        for num_clusters in clusters_list:
+            kmean_labels = clustering_train.k_means(n_clusters=num_clusters)
+            gmm_labels = clustering_train.gaussian_mixture(n_components=num_clusters)
+            spectral_labels = clustering_train.spectral_clustering(n_clusters=num_clusters)
 
-    """
-    dbscan_labels = clustering_train.dbscan()
-    #mean_shift_labels = clustering_train.mean_shift()
+            clusters_dict[f'kmeans_{num_clusters}_train'] = kmean_labels
+            clusters_dict[f'gmm_{num_clusters}_train'] = gmm_labels
+            clusters_dict[f'spectral_{num_clusters}_train'] = spectral_labels
 
-    dbscan_val_labels = clustering_val.dbscan()
-    #mean_shift_val_labels = clustering_val.mean_shift()
+        for num_clusters in clusters_list:
+            kmean_labels = clustering_val.k_means(n_clusters=num_clusters)
+            gmm_labels = clustering_val.gaussian_mixture(n_components=num_clusters)
+            spectral_labels = clustering_val.spectral_clustering(n_clusters=num_clusters)
 
-    clusters_dict[f'dbscan_train'] = dbscan_labels
-    clusters_dict[f'dbscan_val'] = dbscan_val_labels
-    #clusters_dict[f'meanshift_train'] = mean_shift_labels
-    #clusters_dict[f'meanshift_val'] = mean_shift_val_labels
+            clusters_dict[f'kmeans_{num_clusters}_val'] = kmean_labels
+            clusters_dict[f'gmm_{num_clusters}_val'] = gmm_labels
+            clusters_dict[f'spectral_{num_clusters}_val'] = spectral_labels
 
+        # Non-cluster-list based methods
+        dbscan_labels = clustering_train.dbscan()
+        mean_shift_labels = clustering_train.mean_shift()
+        dbscan_val_labels = clustering_val.dbscan()
+        mean_shift_val_labels = clustering_val.mean_shift()
+
+        clusters_dict[f'dbscan_train'] = dbscan_labels
+        clusters_dict[f'dbscan_val'] = dbscan_val_labels
+        clusters_dict[f'meanshift_train'] = mean_shift_labels
+        clusters_dict[f'meanshift_val'] = mean_shift_val_labels
+
+        # Save the computed clusters to a pickle file
+        with open(save_path, 'wb') as f:
+            pickle.dump(clusters_dict, f)
+            print("Saved computed labels to pickle file.")
+
+    # Separate train and validation clusters for return
     clusters_dict_train = {k: v for k, v in clusters_dict.items() if '_train' in k}
     clusters_dict_val = {k: v for k, v in clusters_dict.items() if '_val' in k}
 
     return clusters_dict_train, clusters_dict_val
 
 
-def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count, clusters_list, all_clusters_dict):
+
+
+
+def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count, clusters_list, all_clusters_dict, save_path):
 
   # Convert x_train and y_train to DataFrames (assuming x_train has multiple features)
   x_train_df = pd.DataFrame(x_train)
@@ -511,7 +526,7 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
   x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats_float)
   x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_gaussian'], all_clusters_dict['val_gaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_gaussian'], all_clusters_dict['val_gaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/gaussian.pkl')
 
   model_pool.train_gaussian_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_gaussian_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
@@ -527,7 +542,7 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
   x_val_noise = val_noise.add_uniform_noise(add_nosie_feats_float)
   x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_uniform'], all_clusters_dict['val_uniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_uniform'], all_clusters_dict['val_uniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/uniform.pkl')
 
   model_pool.train_uniform_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_uniform_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
@@ -543,7 +558,7 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
   x_val_noise = val_noise.add_laplace_noise(add_nosie_feats_float)
   x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_laplace'], all_clusters_dict['val_laplace'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_laplace'], all_clusters_dict['val_laplace'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/laplace.pkl')
 
   model_pool.train_laplace_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_laplace_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
@@ -559,7 +574,7 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
   x_val_noise = val_noise.add_dropout_noise(add_nosie_feats_float)
   x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_dropout'], all_clusters_dict['val_dropout'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_dropout'], all_clusters_dict['val_dropout'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/dropout.pkl')
 
   model_pool.train_dropout_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_dropout_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
@@ -577,7 +592,7 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
                                                shift_params={'feature_col':float_cols[0]})
   x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_boundaryshift'], all_clusters_dict['val_boundaryshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_boundaryshift'], all_clusters_dict['val_boundaryshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/boundary.pkl')
 
   model_pool.train_boundaryshift_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_boundaryshift_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
@@ -597,7 +612,7 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
                                   shift_type='scaling',
                                   shift_params = {'scale_factor':1.2})
 
-  all_clusters_dict['train_upscaleshift'], all_clusters_dict['val_upscaleshift']  = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_upscaleshift'], all_clusters_dict['val_upscaleshift']  = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/upscale.pkl')
 
   model_pool.train_upscaleshift_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_upscaleshift_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
@@ -616,7 +631,7 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
                                   shift_type='scaling',
                                 shift_params = {'scale_factor':0.8})
 
-  all_clusters_dict['train_downscaleshift'], all_clusters_dict['val_downscaleshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_downscaleshift'], all_clusters_dict['val_downscaleshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/downscale.pkl')
 
   model_pool.train_downscaleshift_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_downscaleshift_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
@@ -634,7 +649,7 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
                                   shift_type='distribution',
                                   shift_params = {'dist_type':'uniform'})
 
-  all_clusters_dict['train_distshiftuniform'], all_clusters_dict['val_distshiftuniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_distshiftuniform'], all_clusters_dict['val_distshiftuniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/distuniform.pkl')
 
   model_pool.train_distshiftuniform_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_distshiftuniform_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
@@ -655,12 +670,12 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
 
   x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
                                   shift_type='distribution',
-                                  shift_params = {'dist_type':'uniform'})
+                                  shift_params = {'dist_type':'uniform'}) 
   x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
                                   shift_type='distribution',
                                   shift_params = {'dist_type':'uniform'})
 
-  all_clusters_dict['train_distshiftgaussian'], all_clusters_dict['val_distshiftgaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+  all_clusters_dict['train_distshiftgaussian'], all_clusters_dict['val_distshiftgaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/distgaussian.pkl')
 
   model_pool.train_distshiftgaussian_preds = model_pool.get_individual_predictions(x_train_noise).T
   model_pool.train_distshiftgaussian_pred_probs = model_pool.get_individual_probabilities(x_train_noise)

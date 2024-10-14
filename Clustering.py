@@ -8,10 +8,11 @@ from scipy.cluster import hierarchy
 from sklearn.metrics import silhouette_score
 from sklearn.datasets import make_blobs
 import matplotlib.pyplot as plt
+import random
 
 
 class Clustering:
-    def __init__(self, data):
+    def __init__(self, data, seed=1):
         """
         Initializes the Clustering class with data.
         
@@ -19,6 +20,11 @@ class Clustering:
         """
         self.data = data
         self.labels = None
+        self.seed = seed
+
+    def set_random_seeds(self):
+        np.random.seed(self.seed)  # Set seed for numpy
+        random.seed(self.seed)     # Set seed for random
 
     def standardize_data(self):
         """Standardizes the data."""
@@ -30,6 +36,7 @@ class Clustering:
         :param n_clusters: Number of clusters to form.
         :return: Cluster labels.
         """
+        self.set_random_seeds()
         kmeans = KMeans(n_clusters=n_clusters)
         self.labels = kmeans.fit_predict(self.data)
         return self.labels
@@ -40,6 +47,7 @@ class Clustering:
         :param n_clusters: Number of clusters to form.
         :return: Cluster labels.
         """
+        self.set_random_seeds()
         hier = AgglomerativeClustering(n_clusters=n_clusters)
         self.labels = hier.fit_predict(self.data)
         return self.labels
@@ -51,6 +59,7 @@ class Clustering:
         :param min_samples: The number of samples in a neighborhood for a point to be considered a core point.
         :return: Cluster labels.
         """
+        self.set_random_seeds()
         dbscan = DBSCAN(eps=eps, min_samples=min_samples)
         self.labels = dbscan.fit_predict(self.data)
         return self.labels
@@ -60,6 +69,7 @@ class Clustering:
         
         :return: Cluster labels.
         """
+        self.set_random_seeds()
         mean_shift = MeanShift()
         mean_shift.fit(self.data)
         self.labels = mean_shift.predict(self.data)
@@ -71,6 +81,7 @@ class Clustering:
         :param n_components: The number of mixture components.
         :return: Cluster labels.
         """
+        self.set_random_seeds()
         gmm = mixture.GaussianMixture(n_components=n_components)
         gmm.fit(self.data)
         self.labels = gmm.predict(self.data)
@@ -82,6 +93,7 @@ class Clustering:
         :param n_clusters: Number of clusters to form.
         :return: Cluster labels.
         """
+        self.set_random_seeds()
         spectral = SpectralClustering(n_clusters=n_clusters, affinity='nearest_neighbors')
         self.labels = spectral.fit_predict(self.data)
         return self.labels

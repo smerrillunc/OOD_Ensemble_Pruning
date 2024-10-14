@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
+import pickle
 
 class DecisionTreeEnsemble:
     def __init__(self, num_classifiers=10000, feature_fraction=0.5, data_fraction=0.8, 
@@ -163,3 +164,53 @@ class DecisionTreeEnsemble:
             'features': self.feature_subsets[index],
             'samples': self.data_subsets[index]
         }
+
+    def save(self, file_path):
+        """
+        Save the entire state of the ensemble to a file.
+        
+        :param file_path: The path where the model will be saved.
+        """
+        with open(file_path, 'wb') as f:
+            pickle.dump({
+                'num_classifiers': self.num_classifiers,
+                'feature_fraction': self.feature_fraction,
+                'data_fraction': self.data_fraction,
+                'max_depth': self.max_depth,
+                'min_samples_leaf': self.min_samples_leaf,
+                'random_state': self.random_state,
+                'classifiers': self.classifiers,
+                'feature_subsets': self.feature_subsets,
+                'data_subsets': self.data_subsets
+            }, f)
+        print(f"Ensemble saved to {file_path}")
+    
+    @classmethod
+    def load(cls, file_path):
+        """
+        Load the ensemble from a saved file.
+        
+        :param file_path: The path to the saved ensemble file.
+        :return: An instance of DecisionTreeEnsemble with the loaded state.
+        """
+        with open(file_path, 'rb') as f:
+            data = pickle.load(f)
+        
+        # Create an instance of the class
+        ensemble = cls(
+            num_classifiers=data['num_classifiers'],
+            feature_fraction=data['feature_fraction'],
+            data_fraction=data['data_fraction'],
+            max_depth=data['max_depth'],
+            min_samples_leaf=data['min_samples_leaf'],
+            random_state=data['random_state']
+        )
+        
+        # Restore the saved classifiers, feature, and data subsets
+        ensemble.classifiers = data['classifiers']
+        ensemble.feature_subsets = data['feature_subsets']
+        ensemble.data_subsets = data['data_subsets']
+        
+        print(f"Ensemble loaded from {file_path}")
+        
+        return ensemble

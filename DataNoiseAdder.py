@@ -2,34 +2,42 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 from copulas.multivariate import GaussianMultivariate
-
+import random
 class DataNoiseAdder:
-    def __init__(self, data):
+    def __init__(self, data, seed=1):
         self.data = data.copy()
+        self.seed = seed
+
+    def set_random_seeds(self):
+        np.random.seed(self.seed)  # Set seed for numpy
+        random.seed(self.seed)     # Set seed for random
 
     @staticmethod
-    def label_flip(binary_array, p=0.1):
-	    """
-	    Flips bits in a binary array with probability p.
-	    
-	    Parameters:
-	    binary_array (numpy array): The input binary array.
-	    p (float): The probability of flipping each bit.
-	    
-	    Returns:
-	    numpy array: A new array with bits flipped according to the probability.
-	    """
-	    # Generate a random array of the same shape, with values between 0 and 1
-	    random_values = np.random.rand(binary_array.shape[0])
-	    
-	    # Create a mask where random values are less than the probability p
-	    flip_mask = random_values < p
-	    
-	    # Flip the bits using XOR (^) operation with the flip mask
-	    flipped_array = np.copy(binary_array)
-	    flipped_array[flip_mask] = 1 - flipped_array[flip_mask]
-	    
-	    return flipped_array
+    def label_flip(binary_array, p=0.1, seed=1):
+        """
+        Flips bits in a binary array with probability p.
+        
+        Parameters:
+        binary_array (numpy array): The input binary array.
+        p (float): The probability of flipping each bit.
+        
+        Returns:
+        numpy array: A new array with bits flipped according to the probability.
+        """
+        np.random.seed(seed)  # Set seed for numpy
+        random.seed(seed)     # Set seed for random
+
+        # Generate a random array of the same shape, with values between 0 and 1
+        random_values = np.random.rand(binary_array.shape[0])
+        
+        # Create a mask where random values are less than the probability p
+        flip_mask = random_values < p
+        
+        # Flip the bits using XOR (^) operation with the flip mask
+        flipped_array = np.copy(binary_array)
+        flipped_array[flip_mask] = 1 - flipped_array[flip_mask]
+        
+        return flipped_array
 
 
     def add_concept_shift(self, shift_type="boundary_shift", shift_params=None):
@@ -38,6 +46,7 @@ class DataNoiseAdder:
         - shift_type: Type of shift ("boundary_shift", "label_flip").
         - shift_params: Parameters controlling the shift.
         """
+        self.set_random_seeds()
         if shift_params is None:
             shift_params = {}
 
@@ -64,6 +73,7 @@ class DataNoiseAdder:
         - shift_type: Type of shift ("scaling", "distribution", "noise").
         - shift_params: Parameters controlling the shift.
         """
+        self.set_random_seeds()
         if shift_params is None:
             shift_params = {}
 
@@ -96,32 +106,38 @@ class DataNoiseAdder:
         return self.data
 
     def add_gaussian_noise(self, columns, std_dev=1.0):
+        self.set_random_seeds()
         for col in columns:
             self.data[:, col] += np.random.normal(0, std_dev, size=len(self.data))
         return self.data
 
     def add_laplace_noise(self, columns, scale=1.0):
+        self.set_random_seeds()
         for col in columns:
             self.data[:, col] += np.random.laplace(0, scale, size=len(self.data))
         return self.data
 
     def add_uniform_noise(self, columns, noise_range=(-1, 1)):
+        self.set_random_seeds()
         for col in columns:
             self.data[:, col] += np.random.uniform(noise_range[0], noise_range[1], size=len(self.data))
         return self.data
 
     def add_multiplicative_noise(self, columns, factor_range=(0.9, 1.1)):
+        self.set_random_seeds()
         for col in columns:
             self.data[:, col] *= np.random.uniform(factor_range[0], factor_range[1], size=len(self.data))
         return self.data
 
     def add_dropout_noise(self, columns, dropout_prob=0.1, null_value=0):
+        self.set_random_seeds()
         for col in columns:
             mask = np.random.rand(len(self.data)) < dropout_prob
             self.data[mask, col] = null_value
         return self.data
 
     def add_categorical_noise(self, columns, noise_prob=0.1):
+        self.set_random_seeds()
         for col in columns:
             unique_vals = np.unique(self.data[:, col])
             mask = np.random.rand(len(self.data)) < noise_prob
@@ -130,17 +146,20 @@ class DataNoiseAdder:
         return self.data
 
     def add_ordinal_noise(self, columns, shift_range=(-1, 1), min_val=1, max_val=5):
+        self.set_random_seeds()
         for col in columns:
             shift = np.random.randint(shift_range[0], shift_range[1] + 1, size=len(self.data))
             self.data[:, col] = np.clip(self.data[:, col] + shift, min_val, max_val)
         return self.data
 
     def add_jitter(self, columns, jitter_amount=0.01):
+        self.set_random_seeds()
         for col in columns:
             self.data[:, col] += np.random.uniform(-jitter_amount, jitter_amount, size=len(self.data))
         return self.data
 
     def add_differential_privacy_noise(self, columns, epsilon=1.0, sensitivity=1.0):
+        self.set_random_seeds()
         for col in columns:
             scale = sensitivity / epsilon
             self.data[:, col] += np.random.laplace(0, scale, size=len(self.data))
@@ -150,6 +169,7 @@ class DataNoiseAdder:
         """
         Add correlated Gaussian noise to specified columns based on the provided covariance matrix.
         """
+        self.set_random_seeds()
         if mean is None:
             mean = [0] * len(columns)
         if covariance is None:
@@ -168,6 +188,7 @@ class DataNoiseAdder:
         """
         Add correlated noise using Cholesky decomposition to specified columns.
         """
+        self.set_random_seeds()
         if covariance is None:
             covariance = np.eye(len(columns))
 

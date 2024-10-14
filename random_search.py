@@ -16,8 +16,8 @@ from utils import get_dataset, get_ensemble_preds_from_models, get_precision_rec
 from utils import plot_precision_recall, plot_aroc_at_curve, fitness_scatter
 from utils import compute_metrics_in_buckets, flatten_df, compute_cluster_metrics
 from utils import get_categorical_and_float_features
+from utils import get_clusters_dict, make_noise_preds
 from utils import create_directory_if_not_exists, save_dict_to_file
-from utils import get_clusters_dict
 
 import tqdm
 import argparse
@@ -43,11 +43,9 @@ if __name__ == '__main__':
 
     parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/datasets", help='Path to dataset')
     parser.add_argument("-dn", "--dataset_name", type=str, default="heloc_tf", help='Dataset Name')
-
-
-
+    
     parser.add_argument("--save_name", type=str, default=None, help="Save Name")
-
+    parser.add_argument("--model_pool_path", type=str, default=None, help="Path to model pool pickle file")
     parser.add_argument("-sp", "--save_path", type=str, default='/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/data', help='save path')
         
     args = vars(parser.parse_args())
@@ -56,7 +54,9 @@ if __name__ == '__main__':
         args['save_name'] = date.today().strftime('%Y%m%d')
 
     # create save directory for experiment
-    save_path = create_directory_if_not_exists(args['save_path'] + '/' + args['save_name'])
+    save_path = create_directory_if_not_exists(args['save_path'] + '/' + args['dataset_name'] + '/' + args['save_name'])
+    clusters_save_path = args['save_path'] + '/' +  args['dataset_name'] 
+    model_pool_save_path = args['save_path'] + '/' + args['dataset_name'] + '/model_pool.pkl'
     save_dict_to_file(args, save_path + '/experiment_args.txt')
 
     args['clusters_list'] = [3, 10, 25, 100]
@@ -68,16 +68,25 @@ if __name__ == '__main__':
     num_features = x_train.shape[1]
 
 
-    ### Building and Training Model Pool
-    model_pool = DecisionTreeEnsemble(args['num_classifiers'], 
-                                      args['feature_fraction'],
-                                      args['data_fraction'],
-                                      args['max_depth'],
-                                      args['min_samples_leaf'],
-                                      args['random_state'])
+    
+    if args['model_pool_path']:
+        # loading model pool from file
+        print('loading model pool from file')
+        model_pool = model_pool.load(args['model_pool_path'])
 
-    model_pool.train(x_train, y_train)
+    else:
+        ### Building and Training Model Pool
+        print('Building and Training Model Pool')
+        model_pool = DecisionTreeEnsemble(args['num_classifiers'], 
+                                          args['feature_fraction'],
+                                          args['data_fraction'],
+                                          args['max_depth'],
+                                          args['min_samples_leaf'],
+                                          args['random_state'])
 
+        model_pool.train(x_train, y_train)
+        print('saving_model_pool to ')
+        model_pool.save(model_pool_save_path)
 
     # ### Caching Model Pool Predictions
     model_pool_preds = model_pool.predict(x_val_ood)
@@ -98,9 +107,31 @@ if __name__ == '__main__':
 
     # ### Clustering Data into different groupings and preparing formating
     all_clusters_dict = {}
-    all_clusters_dict['train_preds'], all_clusters_dict['val_id']  = get_clusters_dict(x_train, x_val_id, args['clusters_list'])
-    all_clusters_dict = make_noise_preds(x_train, y_train, x_val_id, model_pool, args['shift_feature_count'], args['clusters_list'], all_clusters_dict)
+    all_clusters_dict['train_preds'], all_clusters_dict['val_id']  = get_clusters_dict(x_train, x_val_id, args['clusters_list'], clusters_save_path + '/default.pkl')
+    all_clusters_dict = make_noise_preds(x_train, y_train, x_val_id, model_pool, args['shift_feature_count'], args['clusters_list'], all_clusters_dict, clusters_save_path)
+    
+    generator = SyntheticDataGenerator(x_train, y_train)
 
+    # interpolation
+    interp_x, interp_y = generator.interpolate(x_train.shape[0])
+    model_pool.synth_interp_preds = model_pool.get_individual_predictions(interp_x).T
+    model_pool.synth_interp_pred_probs = model_pool.get_individual_probabilities(interp_x)
+    del interp_x
+
+    # GMM
+    gmm_x, gmm_y = generator.gaussian_mixture(x_train.shape[0])
+    model_pool.synth_gmm_preds = model_pool.get_individual_predictions(gmm_x).T
+    model_pool.synth_gmm_pred_probs = model_pool.get_individual_probabilities(gmm_x)
+    del gmm_x
+
+    dt_x, dt_y = generator.decision_tree(x_train.shape[0])
+    model_pool.synth_dt_preds = model_pool.get_individual_predictions(dt_x).T
+    model_pool.synth_dt_pred_probs = model_pool.get_individual_probabilities(dt_x)
+    del dt_x
+
+    synth_data_dict = {'synth_interp':interp_y.astype('int64'),
+                       'synth_gmm': gmm_y.astype('int64'),
+                       'synth_dt': dt_y.astype('int64')}
     # ### Label Shift
     y_train_flipped = DataNoiseAdder.label_flip(y_train)
     y_val_flipped = DataNoiseAdder.label_flip(y_val_id)
@@ -141,7 +172,9 @@ if __name__ == '__main__':
                 preds_name, pred_prob_name, prefix_name = pred_tuple
     
                 # get clustering associated with data transformation
-                clusters_dict = all_clusters_dict[prefix_name]
+                if 'synth' not in prefix_name:
+                    clusters_dict = all_clusters_dict[prefix_name]
+                    
                 if 'train' in prefix_name:
                     if label_flip:
                         Y = y_train_flipped
@@ -149,6 +182,12 @@ if __name__ == '__main__':
                     else:
                         Y = y_train
                         
+                elif 'synth' in prefix_name:
+                    if label_flip:
+                        continue
+                    else:
+                        Y = synth_data_dict[prefix_name]
+
                 else:
                     if label_flip:
                         prefix_name = prefix_name + '_flip'
@@ -188,14 +227,15 @@ if __name__ == '__main__':
                        f'{prefix_name}_ensemble_variance':np.mean(diversity.ensemble_variance()),
                       })
 
-                # compute cluster metrics
-                tmp_cluster = compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y)
-                col_names = [prefix_name + '_' + x for x in tmp_cluster.columns]
-                col_names = [name.replace('_val_acc', '') for name in col_names]
-                col_names = [name.replace('_train_acc', '') for name in col_names]
-                tmp_cluster.columns = col_names
+                if 'synth' not in prefix_name:
+                    # compute cluster metrics
+                    tmp_cluster = compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y)
+                    col_names = [prefix_name + '_' + x for x in tmp_cluster.columns]
+                    col_names = [name.replace('_val_acc', '') for name in col_names]
+                    col_names = [name.replace('_train_acc', '') for name in col_names]
+                    tmp_cluster.columns = col_names
 
-                cluster_metrics = pd.concat([cluster_metrics, tmp_cluster], axis=1)
+                    cluster_metrics = pd.concat([cluster_metrics, tmp_cluster], axis=1)
 
         raw_metrics = pd.DataFrame([tmp])    
         tmp = pd.concat([raw_metrics, cluster_metrics], axis=1)
