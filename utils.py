@@ -14,6 +14,8 @@ from joblib import load, dump
 from time import sleep
 from EnsembleMetrics import EnsembleMetrics
 from EnsembleDiversity import EnsembleDiversity
+from Clustering import Clustering
+from DataNoiseAdder import DataNoiseAdder
 
 def get_dataset(dataset_path, dataset_name):
     """
@@ -383,6 +385,8 @@ def compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pr
     output = pd.DataFrame()
     
     for prefix, labels in clusters_dict.items():
+        prefix = prefix.replace('_val','')
+        prefix = prefix.replace('_train','')
         tmp = compute_metrics_in_buckets(ensemble_preds, model_preds, model_pred_probs[:,:,1], Y, labels)
         output = pd.concat([output, flatten_df(tmp, prefix)], axis=1)
     
@@ -424,3 +428,244 @@ def get_categorical_and_float_features(data, unique_threshold=10):
             float_features.append(col)  # Otherwise, it's treated as a float/continuous feature
 
     return categorical_features, float_features
+
+
+def get_clusters_dict(x_train, x_val_id, clusters_list):
+    clusters_dict = {}
+    
+    clustering_train = Clustering(x_train)
+    clustering_val = Clustering(x_val_id)
+
+    """
+    for num_clusters in clusters_list:
+        kmean_labels = clustering_train.k_means(n_clusters=num_clusters)
+        hier_labels = clustering_train.hierarchical_clustering(n_clusters=num_clusters)
+        gmm_labels = clustering_train.gaussian_mixture(n_components=num_clusters)
+        spectral_labels = clustering_train.spectral_clustering(n_clusters=num_clusters)
+        clusters_dict[prefix + f'kmeans_{num_clusters}_train'] = kmean_labels
+        clusters_dict[f'hier_{num_clusters}_train'] = hier_labels
+        clusters_dict[f'gmm_{num_clusters}_train'] = gmm_labels
+        clusters_dict[f'spectral_{num_clusters}_train'] = spectral_labels
+
+    for num_clusters in clusters_list:
+        kmean_labels = clustering_val.k_means(n_clusters=num_clusters)
+        hier_labels = clustering_val.hierarchical_clustering(n_clusters=num_clusters)
+        gmm_labels = clustering_val.gaussian_mixture(n_components=num_clusters)
+        spectral_labels = clustering_val.spectral_clustering(n_clusters=num_clusters)
+        clusters_dict[f'kmeans_{num_clusters}_val'] = kmean_labels
+        clusters_dict[f'hier_{num_clusters}_val'] = hier_labels
+        clusters_dict[f'gmm_{num_clusters}_val'] = gmm_labels
+        clusters_dict[f'spectral_{num_clusters}_val'] = spectral_labels
+
+    """
+    dbscan_labels = clustering_train.dbscan()
+    #mean_shift_labels = clustering_train.mean_shift()
+
+    dbscan_val_labels = clustering_val.dbscan()
+    #mean_shift_val_labels = clustering_val.mean_shift()
+
+    clusters_dict[f'dbscan_train'] = dbscan_labels
+    clusters_dict[f'dbscan_val'] = dbscan_val_labels
+    #clusters_dict[f'meanshift_train'] = mean_shift_labels
+    #clusters_dict[f'meanshift_val'] = mean_shift_val_labels
+
+    clusters_dict_train = {k: v for k, v in clusters_dict.items() if '_train' in k}
+    clusters_dict_val = {k: v for k, v in clusters_dict.items() if '_val' in k}
+
+    return clusters_dict_train, clusters_dict_val
+
+
+def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count, clusters_list, all_clusters_dict):
+
+  # Convert x_train and y_train to DataFrames (assuming x_train has multiple features)
+  x_train_df = pd.DataFrame(x_train)
+  y_train_df = pd.Series(y_train)
+
+  # Concatenate x_train_df and y_train_df
+  data = pd.concat([x_train_df, y_train_df], axis=1)
+
+  # Calculate correlation matrix
+  correlation_matrix = data.corr()
+
+  # Extract correlations between each feature and the target variable (y_train is the last column)
+  correlations_with_target = correlation_matrix.iloc[:-1, -1]
+
+  # Sort correlations in descending order
+  sorted_correlations = correlations_with_target.abs().sort_values(ascending=False)
+
+  # we ill add noise to these features
+  categorical_cols, float_cols = get_categorical_and_float_features(x_train)
+
+  add_nosie_feats = sorted_correlations.index[:shift_feature_count ]
+
+  add_nosie_feats_float = [x for x in add_nosie_feats if x in float_cols]
+  add_nosie_feats_categorical = [x for x in add_nosie_feats if x in categorical_cols]
+
+  train_noise = DataNoiseAdder(x_train)
+  val_noise = DataNoiseAdder(x_val_id)
+
+  # ### Guassian Noise
+  x_train_noise = train_noise.add_gaussian_noise(add_nosie_feats_float)
+  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats_float)
+  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  all_clusters_dict['train_gaussian'], all_clusters_dict['val_gaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_gaussian_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_gaussian_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_gaussian_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_gaussian_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+
+  # ### Uniform Noise
+  x_train_noise = train_noise.add_uniform_noise(add_nosie_feats_float)
+  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  x_val_noise = val_noise.add_uniform_noise(add_nosie_feats_float)
+  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  all_clusters_dict['train_uniform'], all_clusters_dict['val_uniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_uniform_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_uniform_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_uniform_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_uniform_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+
+  #### Laplace Noise
+  x_train_noise = train_noise.add_laplace_noise(add_nosie_feats_float)
+  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  x_val_noise = val_noise.add_laplace_noise(add_nosie_feats_float)
+  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  all_clusters_dict['train_laplace'], all_clusters_dict['val_laplace'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_laplace_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_laplace_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_laplace_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_laplace_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+
+  #### Dropout Noise
+  x_train_noise = train_noise.add_dropout_noise(add_nosie_feats_float)
+  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  x_val_noise = val_noise.add_dropout_noise(add_nosie_feats_float)
+  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  all_clusters_dict['train_dropout'], all_clusters_dict['val_dropout'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_dropout_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_dropout_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_dropout_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_dropout_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+
+  #### Boundary Shift
+  x_train_noise = train_noise.add_concept_shift(shift_type="boundary_shift",
+                                               shift_params={'feature_col':float_cols[0]})
+  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  x_val_noise = val_noise.add_concept_shift(shift_type="boundary_shift",
+                                               shift_params={'feature_col':float_cols[0]})
+  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  all_clusters_dict['train_boundaryshift'], all_clusters_dict['val_boundaryshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_boundaryshift_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_boundaryshift_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_boundaryshift_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_boundaryshift_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+
+
+  #### Scaling Shift
+  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='scaling',
+                                  shift_params = {'scale_factor':1.2})
+
+
+  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='scaling',
+                                  shift_params = {'scale_factor':1.2})
+
+  all_clusters_dict['train_upscaleshift'], all_clusters_dict['val_upscaleshift']  = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_upscaleshift_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_upscaleshift_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_upscaleshift_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_upscaleshift_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+
+
+  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='scaling',
+                                  shift_params = {'scale_factor':0.8})
+
+
+  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='scaling',
+                                shift_params = {'scale_factor':0.8})
+
+  all_clusters_dict['train_downscaleshift'], all_clusters_dict['val_downscaleshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_downscaleshift_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_downscaleshift_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_downscaleshift_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_downscaleshift_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+
+
+  ### Distribution shift
+  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='distribution',
+                                  shift_params = {'dist_type':'uniform'})
+  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='distribution',
+                                  shift_params = {'dist_type':'uniform'})
+
+  all_clusters_dict['train_distshiftuniform'], all_clusters_dict['val_distshiftuniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_distshiftuniform_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_distshiftuniform_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_distshiftuniform_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_distshiftuniform_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+
+
+  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='distribution',
+                                  shift_params = {'dist_type':'normal'})
+
+
+  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='distribution',
+                                  shift_params = {'dist_type':'normal'})
+
+  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='distribution',
+                                  shift_params = {'dist_type':'uniform'})
+  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='distribution',
+                                  shift_params = {'dist_type':'uniform'})
+
+  all_clusters_dict['train_distshiftgaussian'], all_clusters_dict['val_distshiftgaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list)
+
+  model_pool.train_distshiftgaussian_preds = model_pool.get_individual_predictions(x_train_noise).T
+  model_pool.train_distshiftgaussian_pred_probs = model_pool.get_individual_probabilities(x_train_noise)
+
+  model_pool.val_distshiftgaussian_preds = model_pool.get_individual_predictions(x_val_noise).T
+  model_pool.val_distshiftgaussian_pred_probs = model_pool.get_individual_probabilities(x_val_noise)
+  del x_train_noise, x_val_noise
+  return all_clusters_dict
