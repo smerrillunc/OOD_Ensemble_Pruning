@@ -39,6 +39,7 @@ if __name__ == '__main__':
     parser.add_argument("-msl", "--min_samples_leaf", type=int, default=5, help='Min samples leaf of DTs')
     parser.add_argument("-rs", "--random_state", type=int, default=1, help='Random state')
 
+    parser.add_argument('--clusters_list', nargs='+', type=int, default=[3, 10, 25], help='List of cluster values')
     parser.add_argument("-sfc", "--shift_feature_count", type=int, default=5, help='Number of features to perturb with random noise')
 
     parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/datasets", help='Path to dataset')
@@ -59,15 +60,14 @@ if __name__ == '__main__':
     model_pool_save_path = args['save_path'] + '/' + args['dataset_name'] + '/model_pool.pkl'
     save_dict_to_file(args, save_path + '/experiment_args.txt')
 
-    args['clusters_list'] = [3, 10, 25, 100]
-    args['shift_feature_count'] = 5
 
     AUCTHRESHS = np.array([0.1, 0.2, 0.3, 0.4, 1. ])
 
     x_train, y_train, x_val_id, y_val_id, x_val_ood, y_val_ood = get_dataset(args['dataset_path'] , args['dataset_name'])
     num_features = x_train.shape[1]
 
-
+    # remove any clusters that are more than data size
+    args['clusters_list'] = [x for x in args['clusters_list'] if x <= (min(x_train.shape[0], x_val_id.shape[0])-1)]
     
     if args['model_pool_path']:
         # loading model pool from file
