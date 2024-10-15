@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument("-msl", "--min_samples_leaf", type=int, default=5, help='Min samples leaf of DTs')
     parser.add_argument("-rs", "--random_state", type=int, default=1, help='Random state')
 
-    parser.add_argument('--clusters_list', nargs='+', type=int, default=[3, 10, 25], help='List of cluster values')
+    parser.add_argument('--clusters_list', nargs='+', type=int, default=[3], help='List of cluster values')
     parser.add_argument("-sfc", "--shift_feature_count", type=int, default=5, help='Number of features to perturb with random noise')
 
     parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/datasets", help='Path to dataset')
@@ -88,45 +88,40 @@ if __name__ == '__main__':
         print('saving_model_pool to ')
         model_pool.save(model_pool_save_path)
 
-    # ### Caching Model Pool Predictions
+    # ###  Model Pool Predictions
     model_pool_preds = model_pool.predict(x_val_ood)
     model_pool_pred_probs = model_pool.predict_proba(x_val_ood)
     mp_precision, mp_recall, mp_auc = get_precision_recall_auc(model_pool_pred_probs, y_val_ood, AUCTHRESHS)
 
 
-    # ### Caching Individual Model Predictions
-    model_pool.train_preds = model_pool.get_individual_predictions(x_train).T
-    model_pool.train_pred_probs = model_pool.get_individual_probabilities(x_train)
+    # ### Saving Individual Model Predictions
+    np.save(save_path + '/train_pred_probs.npy', model_pool.get_individual_probabilities(x_train))
+    np.save(save_path + '/val_id_pred_probs.npy', model_pool.get_individual_probabilities(x_val_id))
 
-    model_pool.val_id_preds = model_pool.get_individual_predictions(x_val_id).T
-    model_pool.val_id_pred_probs = model_pool.get_individual_probabilities(x_val_id)
-
-    model_pool.val_ood_preds = model_pool.get_individual_predictions(x_val_ood).T
+    # cache these
     model_pool.val_ood_pred_probs = model_pool.get_individual_probabilities(x_val_ood)
 
 
     # ### Clustering Data into different groupings and preparing formating
     all_clusters_dict = {}
-    all_clusters_dict['train_preds'], all_clusters_dict['val_id']  = get_clusters_dict(x_train, x_val_id, args['clusters_list'], clusters_save_path + '/default.pkl')
-    all_clusters_dict = make_noise_preds(x_train, y_train, x_val_id, model_pool, args['shift_feature_count'], args['clusters_list'], all_clusters_dict, clusters_save_path)
-    
+    all_clusters_dict['train'], all_clusters_dict['val_id']  = get_clusters_dict(x_train, x_val_id, args['clusters_list'], clusters_save_path + '/default.pkl')
+    all_clusters_dict = make_noise_preds(x_train, y_train, x_val_id, model_pool, args['shift_feature_count'], args['clusters_list'], all_clusters_dict, clusters_save_path, save_path)
+
     generator = SyntheticDataGenerator(x_train, y_train)
 
     # interpolation
     interp_x, interp_y = generator.interpolate(x_train.shape[0])
-    model_pool.synth_interp_preds = model_pool.get_individual_predictions(interp_x).T
-    model_pool.synth_interp_pred_probs = model_pool.get_individual_probabilities(interp_x)
+    np.save(save_path + '/synth_interp_pred_probs.npy', model_pool.get_individual_probabilities(interp_x))
     del interp_x
 
     # GMM
     gmm_x, gmm_y = generator.gaussian_mixture(x_train.shape[0])
-    model_pool.synth_gmm_preds = model_pool.get_individual_predictions(gmm_x).T
-    model_pool.synth_gmm_pred_probs = model_pool.get_individual_probabilities(gmm_x)
+    np.save(save_path + '/synth_gmm_pred_probs.npy', model_pool.get_individual_probabilities(gmm_x))
+
     del gmm_x
 
     dt_x, dt_y = generator.decision_tree(x_train.shape[0])
-    model_pool.synth_dt_preds = model_pool.get_individual_predictions(dt_x).T
-    model_pool.synth_dt_pred_probs = model_pool.get_individual_probabilities(dt_x)
+    np.save(save_path + '/synth_dt_pred_probs.npy', model_pool.get_individual_probabilities(dt_x))
     del dt_x
 
     synth_data_dict = {'synth_interp':interp_y.astype('int64'),
@@ -137,11 +132,17 @@ if __name__ == '__main__':
     y_val_flipped = DataNoiseAdder.label_flip(y_val_id)
 
     # ### Random Search Loop
-    a = [x for x in dir(model_pool) if 'preds' in x]
-    b = [x for x in dir(model_pool) if 'pred_' in x]
-    a.remove('val_ood_preds')
-    b.remove('val_ood_pred_probs')
-    pred_attributes = [(a[i], b[i], a[i].split('_')[0]+'_'+a[i].split('_')[1]) for i in range(len(a))]
+    prefix_names = ['train', 'val_id',
+                    'train_gaussian', 'val_gaussian',
+                    'train_uniform', 'val_uniform',
+                    'train_laplace', 'val_laplace',
+                    'train_dropout', 'val_dropout',
+                    'train_boundaryshift', 'val_boundaryshift',
+                    'train_upscaleshift', 'val_upscaleshift',
+                    'train_downscaleshift', 'val_downscaleshift',
+                    'train_distshiftuniform', 'val_distshiftuniform',
+                    'train_distshiftgaussian', 'val_distshiftgaussian',
+                    'synth_interp', 'synth_gmm', 'synth_dt']
 
     precisions_df = pd.DataFrame()
     recalls_df = pd.DataFrame()
@@ -167,10 +168,9 @@ if __name__ == '__main__':
         cluster_metrics = pd.DataFrame()
 
         # Compute all Fitness Metrics
-        for label_flip in [0, 1]:
-            for pred_tuple in pred_attributes:
-                preds_name, pred_prob_name, prefix_name = pred_tuple
-    
+        for label_flip in [0]: #[0, 1]:
+            for prefix_name in prefix_names:
+                print(f'{prefix_name}, {label_flip}')
                 # get clustering associated with data transformation
                 if 'synth' not in prefix_name:
                     clusters_dict = all_clusters_dict[prefix_name]
@@ -195,11 +195,11 @@ if __name__ == '__main__':
                     else:
                         Y = y_val_id
 
-                model_pool_preds = getattr(model_pool, preds_name)
-                model_pool_pred_probs = getattr(model_pool, pred_prob_name)
+                model_pool_pred_probs = np.load(save_path + f'/{prefix_name}_pred_probs.npy')
+                model_pool_preds = model_pool_pred_probs.argmax(axis=-1)
 
-                model_preds = model_pool_preds[indices]
                 model_pred_probs = model_pool_pred_probs[indices]
+                model_preds = model_pred_probs.argmax(axis=-1)
 
                 # id val preds of sub-ensemble
                 ensemble_preds, ensemble_pred_probs = get_ensemble_preds_from_models(model_pred_probs)
@@ -227,15 +227,15 @@ if __name__ == '__main__':
                        f'{prefix_name}_ensemble_variance':np.mean(diversity.ensemble_variance()),
                       })
 
-                if 'synth' not in prefix_name:
-                    # compute cluster metrics
-                    tmp_cluster = compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y)
-                    col_names = [prefix_name + '_' + x for x in tmp_cluster.columns]
-                    col_names = [name.replace('_val_acc', '') for name in col_names]
-                    col_names = [name.replace('_train_acc', '') for name in col_names]
-                    tmp_cluster.columns = col_names
+                # compute cluster metrics
+                tmp_cluster = compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y)
+                col_names = [prefix_name + '_' + x for x in tmp_cluster.columns]
+                col_names = [name.replace('_val_acc', '') for name in col_names]
+                col_names = [name.replace('_train_acc', '') for name in col_names]
+                tmp_cluster.columns = col_names
 
-                    cluster_metrics = pd.concat([cluster_metrics, tmp_cluster], axis=1)
+                cluster_metrics = pd.concat([cluster_metrics, tmp_cluster], axis=1)
+
 
         raw_metrics = pd.DataFrame([tmp])    
         tmp = pd.concat([raw_metrics, cluster_metrics], axis=1)
