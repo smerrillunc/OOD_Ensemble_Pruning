@@ -12,7 +12,7 @@ from SyntheticDataGenerator import SyntheticDataGenerator
 from EnsembleDiversity import EnsembleDiversity
 from EnsembleMetrics import EnsembleMetrics
 
-from utils import get_dataset, get_ensemble_preds_from_models, get_precision_recall_auc, auprc_threshs
+from utils import get_tableshift_dataset, get_ensemble_preds_from_models, get_precision_recall_auc, auprc_threshs
 from utils import plot_precision_recall, plot_aroc_at_curve, fitness_scatter
 from utils import compute_metrics_in_buckets, flatten_df, compute_cluster_metrics
 from utils import get_categorical_and_float_features
@@ -42,8 +42,8 @@ if __name__ == '__main__':
     parser.add_argument('--clusters_list', nargs='+', type=int, default=[5], help='List of cluster values')
     parser.add_argument("-sfc", "--shift_feature_count", type=int, default=5, help='Number of features to perturb with random noise')
 
-    parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/datasets", help='Path to dataset')
-    parser.add_argument("-dn", "--dataset_name", type=str, default="heloc_tf", help='Dataset Name')
+    parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Reliable Machine Learning/tableshift_datasets", help='Path to dataset')
+    parser.add_argument("-dn", "--dataset_name", type=str, default="college_scorecard", help='Dataset Name')
     
     parser.add_argument("--save_name", type=str, default=None, help="Save Name")
     parser.add_argument("--model_pool_path", type=str, default=None, help="Path to model pool pickle file")
@@ -63,7 +63,7 @@ if __name__ == '__main__':
 
     AUCTHRESHS = np.array([0.1, 0.2, 0.3, 0.4, 1. ])
 
-    x_train, y_train, x_val_id, y_val_id, x_val_ood, y_val_ood = get_dataset(args['dataset_path'] , args['dataset_name'])
+    x_train, y_train, x_val_id, y_val_id, x_val_ood, y_val_ood = get_tableshift_dataset(args['dataset_path'] , args['dataset_name'])
     num_features = x_train.shape[1]
 
     # remove any clusters that are more than data size

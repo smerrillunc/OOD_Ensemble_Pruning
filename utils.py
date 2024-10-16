@@ -99,6 +99,36 @@ def get_dataset(dataset_path, dataset_name):
 
     return X, Y.ravel(), X_val, Y_val.ravel(), X_val_ood, Y_val_ood.ravel()
 
+
+def get_tableshift_dataset(dataset_path, dataset_name):
+    
+    """
+    datasets = ['anes',
+                 'college_scorecard',
+                 'acsunemployment',
+                 'acsfoodstamps',
+                 'brfss_blood_pressure',
+                 'acsincome',
+                 'diabetes_readmission',
+                 'nhanes_lead',
+                 'dataset_diabetes',
+                 'physionet',
+                 'acspubcov',
+                 'brfss_diabetes']
+    """
+    
+    X = np.loadtxt(f'{dataset_path}/{dataset_name}/x_train.csv', delimiter=',', skiprows=1)
+    Y = np.loadtxt(f'{dataset_path}/{dataset_name}/y_train.csv', delimiter=',', skiprows=1)
+
+    X_val = np.loadtxt(f'{dataset_path}/{dataset_name}/x_val_id.csv', delimiter=',', skiprows=1)
+    Y_val = np.loadtxt(f'{dataset_path}/{dataset_name}/y_val_id.csv', delimiter=',', skiprows=1)
+
+    X_val_ood = np.loadtxt(f'{dataset_path}/{dataset_name}/x_val_ood.csv', delimiter=',', skiprows=1)
+    Y_val_ood = np.loadtxt(f'{dataset_path}/{dataset_name}/y_val_ood.csv', delimiter=',', skiprows=1)
+    return X, Y.ravel(), X_val, Y_val.ravel(), X_val_ood, Y_val_ood.ravel()
+
+
+
 def create_directory_if_not_exists(directory):
     """
     Description: Create a new file if one doesn't exist
