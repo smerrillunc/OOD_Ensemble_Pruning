@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument("-msl", "--min_samples_leaf", type=int, default=5, help='Min samples leaf of DTs')
     parser.add_argument("-rs", "--random_state", type=int, default=1, help='Random state')
 
-    parser.add_argument('--clusters_list', nargs='+', type=int, default=[3], help='List of cluster values')
+    parser.add_argument('--clusters_list', nargs='+', type=int, default=[5], help='List of cluster values')
     parser.add_argument("-sfc", "--shift_feature_count", type=int, default=5, help='Number of features to perturb with random noise')
 
     parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/datasets", help='Path to dataset')
@@ -92,6 +92,15 @@ if __name__ == '__main__':
     model_pool_preds = model_pool.predict(x_val_ood)
     model_pool_pred_probs = model_pool.predict_proba(x_val_ood)
     mp_precision, mp_recall, mp_auc = get_precision_recall_auc(model_pool_pred_probs, y_val_ood, AUCTHRESHS)
+    
+    with open(save_path + f'/model_pool_precision.pkl', 'wb') as file:
+        pickle.dump(mp_precision, file)
+
+    with open(save_path + f'/model_pool_recall.pkl', 'wb') as file:
+        pickle.dump(mp_recall, file)
+
+    with open(save_path + f'/model_pool_auc.pkl', 'wb') as file:
+        pickle.dump(mp_auc, file)
 
 
     # ### Saving Individual Model Predictions
