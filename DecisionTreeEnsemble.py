@@ -1,10 +1,11 @@
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 import pickle
+import tqdm
 
 class DecisionTreeEnsemble:
     def __init__(self, num_classifiers=10000, feature_fraction=0.5, data_fraction=0.8, 
-                 max_depth=None, min_samples_leaf=1, random_state=None):
+                 max_depth=10, min_samples_leaf=4, random_state=0):
         """
         Initialize the ensemble of decision tree classifiers.
         
@@ -47,7 +48,7 @@ class DecisionTreeEnsemble:
         :param X: Feature matrix (2D array).
         :param y: Target vector (1D array).
         """
-        for i in range(self.num_classifiers):
+        for i in tqdm.tqdm(range(self.num_classifiers)):
             # Get random subsets of features and samples
             feature_indices, sample_indices = self._get_random_subsets(X)
             

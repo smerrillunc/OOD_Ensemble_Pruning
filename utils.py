@@ -111,7 +111,6 @@ def get_tableshift_dataset(dataset_path, dataset_name):
                  'acsincome',
                  'diabetes_readmission',
                  'nhanes_lead',
-                 'dataset_diabetes',
                  'physionet',
                  'acspubcov',
                  'brfss_diabetes']

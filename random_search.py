@@ -33,7 +33,7 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--ensemble_size", type=int, default=100, help='Size of ensemble to search for')
     parser.add_argument("-mps", "--num_classifiers", type=int, default=10000, help='Model Pool Size')
     parser.add_argument("-ff", "--feature_fraction", type=float, default=0.5, help='Fraction of features to use for training')
-    parser.add_argument("-df", "--data_fraction", type=float, default=0.8, help='Fraction of data to use for training')
+    parser.add_argument("-df", "--data_fraction", type=float, default=0.6, help='Fraction of data to use for training')
     
     parser.add_argument("-md", "--max_depth", type=int, default=10, help='Max depth of DTs')
     parser.add_argument("-msl", "--min_samples_leaf", type=int, default=5, help='Min samples leaf of DTs')
@@ -178,7 +178,8 @@ if __name__ == '__main__':
 
         # Compute all Fitness Metrics
         for label_flip in [0]: #[0, 1]:
-            for prefix_name in prefix_names:
+            print('Evaluating Prefixes')
+            for prefix_name in tqdm.tqdm(prefix_names):
                 print(f'{prefix_name}, {label_flip}')
                 # get clustering associated with data transformation
                 if 'synth' not in prefix_name:
