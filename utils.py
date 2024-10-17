@@ -115,15 +115,15 @@ def get_tableshift_dataset(dataset_path, dataset_name):
                  'acspubcov',
                  'brfss_diabetes']
     """
-    
-    X = np.loadtxt(f'{dataset_path}/{dataset_name}/x_train.csv', delimiter=',', skiprows=1)
-    Y = np.loadtxt(f'{dataset_path}/{dataset_name}/y_train.csv', delimiter=',', skiprows=1)
+    # accidently saved indexes in tableshift dataset
+    X = np.loadtxt(f'{dataset_path}/{dataset_name}/x_train.csv', delimiter=',', skiprows=1)[:, 1:]
+    Y = np.loadtxt(f'{dataset_path}/{dataset_name}/y_train.csv', delimiter=',', skiprows=1)[:, 1]
 
-    X_val = np.loadtxt(f'{dataset_path}/{dataset_name}/x_val_id.csv', delimiter=',', skiprows=1)
-    Y_val = np.loadtxt(f'{dataset_path}/{dataset_name}/y_val_id.csv', delimiter=',', skiprows=1)
+    X_val = np.loadtxt(f'{dataset_path}/{dataset_name}/x_val_id.csv', delimiter=',', skiprows=1)[:, 1:]
+    Y_val = np.loadtxt(f'{dataset_path}/{dataset_name}/y_val_id.csv', delimiter=',', skiprows=1)[:, 1]
 
-    X_val_ood = np.loadtxt(f'{dataset_path}/{dataset_name}/x_val_ood.csv', delimiter=',', skiprows=1)
-    Y_val_ood = np.loadtxt(f'{dataset_path}/{dataset_name}/y_val_ood.csv', delimiter=',', skiprows=1)
+    X_val_ood = np.loadtxt(f'{dataset_path}/{dataset_name}/x_val_ood.csv', delimiter=',', skiprows=1)[:, 1:]
+    Y_val_ood = np.loadtxt(f'{dataset_path}/{dataset_name}/y_val_ood.csv', delimiter=',', skiprows=1)[:, 1]
     return X, Y.ravel(), X_val, Y_val.ravel(), X_val_ood, Y_val_ood.ravel()
 
 

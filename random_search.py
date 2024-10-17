@@ -64,6 +64,9 @@ if __name__ == '__main__':
     AUCTHRESHS = np.array([0.1, 0.2, 0.3, 0.4, 1. ])
 
     x_train, y_train, x_val_id, y_val_id, x_val_ood, y_val_ood = get_tableshift_dataset(args['dataset_path'] , args['dataset_name'])
+    assert(len(np.unique(y_train)) == 2)
+    assert(len(np.unique(y_val_id)) == 2)
+    assert(len(np.unique(y_val_ood)) == 2)
     num_features = x_train.shape[1]
 
     # remove any clusters that are more than data size
