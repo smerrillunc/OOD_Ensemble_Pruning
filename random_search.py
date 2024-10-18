@@ -22,7 +22,7 @@ from utils import create_directory_if_not_exists, save_dict_to_file
 import tqdm
 import argparse
 from datetime import date
-
+import pickle
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--ntrls", type=int, default=100000, help='Number of random search trials')
     parser.add_argument("-e", "--ensemble_size", type=int, default=100, help='Size of ensemble to search for')
     parser.add_argument("-mps", "--num_classifiers", type=int, default=10000, help='Model Pool Size')
-    parser.add_argument("-cs", "--cache_size", type=int, default=100, help='Model Pool cache_size')
+    parser.add_argument("-cs", "--cache_size", type=int, default=10, help='Model Pool cache_size')
 
     parser.add_argument("-ff", "--feature_fraction", type=float, default=0.5, help='Fraction of features to use for training')
     parser.add_argument("-df", "--data_fraction", type=float, default=0.6, help='Fraction of data to use for training')
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # create save directory for experiment
     save_path = create_directory_if_not_exists(args['save_path'] + '/' + args['dataset_name'] + '/' + args['save_name'])
     clusters_save_path = args['save_path'] + '/' +  args['dataset_name'] 
-    model_pool_save_path = args['save_path'] + '/' + args['dataset_name'] + '/model_pool.pkl'
+    model_pool_save_path = args['save_path'] + '/' + args['dataset_name'] 
     save_dict_to_file(args, save_path + '/experiment_args.txt')
 
 
@@ -89,12 +89,12 @@ if __name__ == '__main__':
                                           min_samples_leaf=args['min_samples_leaf'],
                                           random_state=args['random_state'],
                                           cache_size=args['cache_size'],
-                                          save_dir=model_pool_save_path
+                                          save_dir=model_pool_save_path + '/batches'
                                             )
 
         model_pool.train(x_train, y_train)
         print('saving_model_pool to ')
-        model_pool.save(model_pool_save_path)
+        model_pool.save(model_pool_save_path + '/model_pool.pkl' )
 
     # ###  Model Pool Predictions
     model_pool_preds = model_pool.predict(x_val_ood)

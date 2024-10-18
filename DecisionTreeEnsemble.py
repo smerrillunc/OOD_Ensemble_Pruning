@@ -26,7 +26,7 @@ class DecisionTreeEnsemble:
         self.max_depth = max_depth
         self.min_samples_leaf = min_samples_leaf
         self.random_state = random_state
-        self.cache_size = cache_size
+        self.cache_size, self.batch_size = cache_size, cache_size
         self.save_dir = save_dir
         
         self.feature_subsets = []
@@ -49,7 +49,7 @@ class DecisionTreeEnsemble:
         
         return feature_indices, sample_indices
 
-    def train(self, X, y, batch_size=100):
+    def train(self, X, y):
         """
         Train the ensemble of decision trees in batches and save each batch to disk.
         
@@ -57,12 +57,12 @@ class DecisionTreeEnsemble:
         :param y: Target vector (1D array).
         :param batch_size: The number of classifiers to train in each batch.
         """
-        for batch_start in range(0, self.num_classifiers, batch_size):
+        for batch_start in range(0, self.num_classifiers, self.batch_size):
             batch_classifiers = []
             batch_feature_subsets = []
             batch_data_subsets = []
             
-            for i in tqdm.tqdm(range(batch_start, min(batch_start + batch_size, self.num_classifiers))):
+            for i in tqdm.tqdm(range(batch_start, min(batch_start + self.batch_size, self.num_classifiers))):
                 # Get random subsets of features and samples
                 feature_indices, sample_indices = self._get_random_subsets(X)
                 X_subset = X[sample_indices][:, feature_indices]
@@ -81,7 +81,7 @@ class DecisionTreeEnsemble:
                 batch_data_subsets.append(sample_indices)
 
             # Save the batch to disk
-            batch_file = os.path.join(self.save_dir, f'batch_{batch_start // batch_size}.pkl')
+            batch_file = os.path.join(self.save_dir, f'batch_{batch_start // self.batch_size}.pkl')
             with open(batch_file, 'wb') as f:
                 pickle.dump({
                     'classifiers': batch_classifiers,
@@ -89,7 +89,7 @@ class DecisionTreeEnsemble:
                     'data_subsets': batch_data_subsets
                 }, f)
 
-            print(f"Saved batch {batch_start // batch_size} to {batch_file}")
+            print(f"Saved batch {batch_start // self.batch_size} to {batch_file}")
 
             # Store feature and data subsets for prediction
             self.feature_subsets.extend(batch_feature_subsets)
@@ -108,12 +108,12 @@ class DecisionTreeEnsemble:
             return self.classifier_cache[index]
 
         # Otherwise, load the classifier from disk
-        batch_num = index // 1000
+        batch_num = index // self.batch_size
         batch_file = os.path.join(self.save_dir, f'batch_{batch_num}.pkl')
         with open(batch_file, 'rb') as f:
             batch = pickle.load(f)
 
-        classifier_index_in_batch = index % 1000
+        classifier_index_in_batch = index % self.batch_size
         clf = batch['classifiers'][classifier_index_in_batch]
 
         # Add to cache
