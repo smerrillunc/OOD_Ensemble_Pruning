@@ -32,6 +32,8 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--ntrls", type=int, default=100000, help='Number of random search trials')
     parser.add_argument("-e", "--ensemble_size", type=int, default=100, help='Size of ensemble to search for')
     parser.add_argument("-mps", "--num_classifiers", type=int, default=10000, help='Model Pool Size')
+    parser.add_argument("-cs", "--cache_size", type=int, default=100, help='Model Pool cache_size')
+
     parser.add_argument("-ff", "--feature_fraction", type=float, default=0.5, help='Fraction of features to use for training')
     parser.add_argument("-df", "--data_fraction", type=float, default=0.6, help='Fraction of data to use for training')
     
@@ -80,12 +82,15 @@ if __name__ == '__main__':
     else:
         ### Building and Training Model Pool
         print('Building and Training Model Pool')
-        model_pool = DecisionTreeEnsemble(args['num_classifiers'], 
-                                          args['feature_fraction'],
-                                          args['data_fraction'],
-                                          args['max_depth'],
-                                          args['min_samples_leaf'],
-                                          args['random_state'])
+        model_pool = DecisionTreeEnsemble(num_classifiers=args['num_classifiers'], 
+                                          feature_fraction=args['feature_fraction'],
+                                          data_fraction=args['data_fraction'],
+                                          max_depth=args['max_depth'],
+                                          min_samples_leaf=args['min_samples_leaf'],
+                                          random_state=args['random_state'],
+                                          cache_size=args['cache_size'],
+                                          save_dir=model_pool_save_path
+                                            )
 
         model_pool.train(x_train, y_train)
         print('saving_model_pool to ')
