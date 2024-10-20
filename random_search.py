@@ -71,6 +71,9 @@ if __name__ == '__main__':
     sample_indices = np.random.choice(x_train.shape[0], size=min(x_train.shape[0], args['sample_size']), replace=True)
     x_train = x_train[sample_indices]
     y_train = y_train[sample_indices]
+    assert(len(np.unique(y_train)) == 2)
+    assert(len(np.unique(y_val_id)) == 2)
+    assert(len(np.unique(y_val_ood)) == 2)
 
     num_features = x_train.shape[1]
 
