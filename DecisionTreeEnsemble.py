@@ -2,6 +2,8 @@ import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 import pickle
 import tqdm
+import gc
+import numbers
 
 class DecisionTreeEnsemble:
     def __init__(self, num_classifiers=10000, feature_fraction=0.5, data_fraction=0.8, 
@@ -23,8 +25,8 @@ class DecisionTreeEnsemble:
         self.min_samples_leaf = min_samples_leaf
         self.random_state = random_state
         self.classifiers = []
-        self.feature_subsets = []
-        self.data_subsets = []
+        #self.feature_subsets = []
+        #self.data_subsets = []
         
     def _get_random_subsets(self, X):
         """
@@ -48,26 +50,37 @@ class DecisionTreeEnsemble:
         :param X: Feature matrix (2D array).
         :param y: Target vector (1D array).
         """
+        n_features = int(X.shape[1] * self.feature_fraction)
+        n_samples = int(X.shape[0] * self.data_fraction)
+
         for i in tqdm.tqdm(range(self.num_classifiers)):
             # Get random subsets of features and samples
-            feature_indices, sample_indices = self._get_random_subsets(X)
+    
+            random_state = (self.random_state + i) if self.random_state else i
+            random_instance = DecisionTreeEnsemble.check_random_state(random_state)
+
+            feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
+            sample_indices = random_instance.choice(X.shape[0], n_samples, replace=False)
+
             
             # Subset the data
-            X_subset = X[sample_indices][:, feature_indices]
-            y_subset = y[sample_indices]
-            
+            X_subset = np.take(X, sample_indices, axis=0)[:, feature_indices]
+            y_subset = np.take(y, sample_indices)
+
             # Train the decision tree with additional hyperparameters
             clf = DecisionTreeClassifier(
                 max_depth=self.max_depth,
                 min_samples_leaf=self.min_samples_leaf,
-                random_state=(self.random_state + i) if self.random_state else None
+                random_state=random_state
             )
             clf.fit(X_subset, y_subset)
-            
             # Store the trained classifier and corresponding feature/sample indices
             self.classifiers.append(clf)
-            self.feature_subsets.append(feature_indices)
-            self.data_subsets.append(sample_indices)
+            del X_subset, y_subset, clf
+            gc.collect()  
+
+            #self.feature_subsets.append(feature_indices)
+            #self.data_subsets.append(sample_indices)
             
             if (i + 1) % 1000 == 0:  # Print progress every 1000 classifiers
                 print(f"Trained {i + 1} classifiers.")
@@ -81,9 +94,11 @@ class DecisionTreeEnsemble:
         """
         # Store predictions for each classifier
         all_predictions = np.zeros((X.shape[0], len(self.classifiers)))
+        n_features = int(X.shape[1] * self.feature_fraction)
 
         for i, clf in enumerate(self.classifiers):
-            feature_indices = self.feature_subsets[i]
+            random_instance = DecisionTreeEnsemble.check_random_state(clf.random_state)
+            feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
             all_predictions[:, i] = clf.predict(X[:, feature_indices])
 
         # Aggregate predictions (majority voting here)
@@ -102,9 +117,12 @@ class DecisionTreeEnsemble:
         """
         # Store predictions for each classifier
         all_predictions = np.zeros((X.shape[0], len(self.classifiers)))
+        n_features = int(X.shape[1] * self.feature_fraction)
 
         for i, clf in enumerate(self.classifiers):
-            feature_indices = self.feature_subsets[i]
+            random_instance = DecisionTreeEnsemble.check_random_state(clf.random_state)
+            feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
+
             all_predictions[:, i] = clf.predict(X[:, feature_indices])
 
         # Calculate probabilities as the proportion of classifiers that predict each class
@@ -124,9 +142,11 @@ class DecisionTreeEnsemble:
         """
         # Store predictions for each classifier
         all_predictions = np.zeros((X.shape[0], len(self.classifiers)))
+        n_features = int(X.shape[1] * self.feature_fraction)
 
         for i, clf in enumerate(self.classifiers):
-            feature_indices = self.feature_subsets[i]
+            random_instance = DecisionTreeEnsemble.check_random_state(clf.random_state)
+            feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
             all_predictions[:, i] = clf.predict(X[:, feature_indices])
 
         return np.array(all_predictions)
@@ -141,9 +161,11 @@ class DecisionTreeEnsemble:
                  (n_samples, n_classes).
         """
         all_probabilities = []
+        n_features = int(X.shape[1] * self.feature_fraction)
 
         for i, clf in enumerate(self.classifiers):
-            feature_indices = self.feature_subsets[i]
+            random_instance = DecisionTreeEnsemble.check_random_state(clf.random_state)
+            feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
             # Predict probabilities for each sample
             probabilities = clf.predict_proba(X[:, feature_indices])
             all_probabilities.append(probabilities)
@@ -162,8 +184,8 @@ class DecisionTreeEnsemble:
         
         return {
             'model': self.classifiers[index],
-            'features': self.feature_subsets[index],
-            'samples': self.data_subsets[index]
+            #'features': self.feature_subsets[index],
+            #'samples': self.data_subsets[index]
         }
 
     def save(self, file_path):
@@ -181,11 +203,46 @@ class DecisionTreeEnsemble:
                 'min_samples_leaf': self.min_samples_leaf,
                 'random_state': self.random_state,
                 'classifiers': self.classifiers,
-                'feature_subsets': self.feature_subsets,
-                'data_subsets': self.data_subsets
+                #'feature_subsets': self.feature_subsets,
+               # 'data_subsets': self.data_subsets
             }, f)
         print(f"Ensemble saved to {file_path}")
     
+
+    @staticmethod
+    def check_random_state(seed):
+        """Turn seed into a np.random.RandomState instance.
+
+        Parameters
+        ----------
+        seed : None, int or instance of RandomState
+            If seed is None, return the RandomState singleton used by np.random.
+            If seed is an int, return a new RandomState instance seeded with seed.
+            If seed is already a RandomState instance, return it.
+            Otherwise raise ValueError.
+
+        Returns
+        -------
+        :class:`numpy:numpy.random.RandomState`
+            The random state object based on `seed` parameter.
+
+        Examples
+        --------
+        >>> from sklearn.utils.validation import check_random_state
+        >>> check_random_state(42)
+        RandomState(MT19937) at 0x...
+        """
+        if seed is None or seed is np.random:
+            return np.random.mtrand._rand
+        if isinstance(seed, numbers.Integral):
+            return np.random.RandomState(seed)
+        if isinstance(seed, np.random.RandomState):
+            return seed
+        raise ValueError(
+            "%r cannot be used to seed a numpy.random.RandomState instance" % seed
+        )
+
+
     @classmethod
     def load(cls, file_path):
         """
@@ -209,8 +266,8 @@ class DecisionTreeEnsemble:
         
         # Restore the saved classifiers, feature, and data subsets
         ensemble.classifiers = data['classifiers']
-        ensemble.feature_subsets = data['feature_subsets']
-        ensemble.data_subsets = data['data_subsets']
+        #ensemble.feature_subsets = data['feature_subsets']
+        #ensemble.data_subsets = data['data_subsets']
         
         print(f"Ensemble loaded from {file_path}")
         

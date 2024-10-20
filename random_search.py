@@ -24,6 +24,9 @@ import argparse
 from datetime import date
 
 import warnings
+import pickle
+import gc
+
 warnings.filterwarnings('ignore')
 
 if __name__ == '__main__':
@@ -38,6 +41,7 @@ if __name__ == '__main__':
     parser.add_argument("-md", "--max_depth", type=int, default=10, help='Max depth of DTs')
     parser.add_argument("-msl", "--min_samples_leaf", type=int, default=5, help='Min samples leaf of DTs')
     parser.add_argument("-rs", "--random_state", type=int, default=1, help='Random state')
+    parser.add_argument("-ss", "--sample_size", type=int, default=100000, help='Random state')
 
     parser.add_argument('--clusters_list', nargs='+', type=int, default=[5], help='List of cluster values')
     parser.add_argument("-sfc", "--shift_feature_count", type=int, default=5, help='Number of features to perturb with random noise')
@@ -64,7 +68,15 @@ if __name__ == '__main__':
     AUCTHRESHS = np.array([0.1, 0.2, 0.3, 0.4, 1. ])
 
     x_train, y_train, x_val_id, y_val_id, x_val_ood, y_val_ood = get_tableshift_dataset(args['dataset_path'] , args['dataset_name'])
+    sample_indices = np.random.choice(x_train.shape[0], size=min(x_train.shape[0], args['sample_size']), replace=True)
+    x_train = x_train[sample_indices]
+    y_train = y_train[sample_indices]
+
     num_features = x_train.shape[1]
+
+    x_train = x_train.astype(np.float16)
+    x_val_id = x_val_id.astype(np.float16)
+    x_val_ood = x_val_ood.astype(np.float16)
 
     # remove any clusters that are more than data size
     args['clusters_list'] = [x for x in args['clusters_list'] if x <= (min(x_train.shape[0], x_val_id.shape[0])-1)]
@@ -77,6 +89,8 @@ if __name__ == '__main__':
     else:
         ### Building and Training Model Pool
         print('Building and Training Model Pool')
+
+
         model_pool = DecisionTreeEnsemble(args['num_classifiers'], 
                                           args['feature_fraction'],
                                           args['data_fraction'],
@@ -88,6 +102,7 @@ if __name__ == '__main__':
         print('saving_model_pool to ')
         model_pool.save(model_pool_save_path)
 
+    
     # ###  Model Pool Predictions
     model_pool_preds = model_pool.predict(x_val_ood)
     model_pool_pred_probs = model_pool.predict_proba(x_val_ood)
@@ -114,7 +129,7 @@ if __name__ == '__main__':
     # ### Clustering Data into different groupings and preparing formating
     all_clusters_dict = {}
     all_clusters_dict['train'], all_clusters_dict['val_id']  = get_clusters_dict(x_train, x_val_id, args['clusters_list'], clusters_save_path + '/default.pkl')
-    all_clusters_dict = make_noise_preds(x_train, y_train, x_val_id, model_pool, args['shift_feature_count'], args['clusters_list'], all_clusters_dict, clusters_save_path, save_path)
+    #all_clusters_dict = make_noise_preds(x_train, y_train, x_val_id, model_pool, args['shift_feature_count'], args['clusters_list'], all_clusters_dict, clusters_save_path, save_path)
 
     generator = SyntheticDataGenerator(x_train, y_train)
 
@@ -254,4 +269,5 @@ if __name__ == '__main__':
         recalls_df.to_csv(save_path+'/recalls_df.csv', index=False)
         aucs_df.to_csv(save_path+'/aucs_df.csv', index=False)
         fitness_df.to_csv(save_path+'/fitness_df.csv', index=False)
+    
         
