@@ -228,8 +228,11 @@ if __name__ == '__main__':
                     else:
                         Y = y_val_id
 
-                model_pool_pred_probs = np.load(save_path + f'/{prefix_name}_pred_probs.npy')
-                model_pool_preds = model_pool_pred_probs.argmax(axis=-1)
+                try:
+                    model_pool_pred_probs = np.load(save_path + f'/{prefix_name}_pred_probs.npy')
+                    model_pool_preds = model_pool_pred_probs.argmax(axis=-1)
+                except Exception as e:
+                    print(e)
 
                 model_pred_probs = model_pool_pred_probs[indices]
                 model_preds = model_pred_probs.argmax(axis=-1)
