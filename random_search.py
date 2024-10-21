@@ -175,110 +175,125 @@ if __name__ == '__main__':
                     'train_distshiftuniform', 'val_distshiftuniform',
                     'train_distshiftgaussian', 'val_distshiftgaussian',
                     'synth_interp', 'synth_gmm', 'synth_dt']
+    from memory_profiler import profile
 
-    precisions_df = pd.DataFrame()
-    recalls_df = pd.DataFrame()
-    aucs_df = pd.DataFrame()
-    fitness_df = pd.DataFrame()
+    @profile
+    def run_random_search():
+        precisions_df = pd.DataFrame()
+        recalls_df = pd.DataFrame()
+        aucs_df = pd.DataFrame()
+        fitness_df = pd.DataFrame()
 
-    print("Start random search")
-    for trial in tqdm.tqdm(range(args['ntrls'])):
-        indices = np.random.choice(model_pool.num_classifiers, size=args['ensemble_size'], replace=True)
+        print("Start random search")
+        for trial in tqdm.tqdm(range(args['ntrls'])):
+            indices = np.random.choice(model_pool.num_classifiers, size=args['ensemble_size'], replace=True)
 
-        # ood preds of sub-ensemble
-        ood_preds, ood_pred_probs = get_ensemble_preds_from_models(model_pool.val_ood_pred_probs[indices])
+            # ood preds of sub-ensemble
+            ood_preds, ood_pred_probs = get_ensemble_preds_from_models(model_pool.val_ood_pred_probs[indices])
 
-        # save OOD precision/recalls seprately
-        precision, recall, auc = get_precision_recall_auc(ood_pred_probs, y_val_ood, AUCTHRESHS)
+            # save OOD precision/recalls seprately
+            precision, recall, auc = get_precision_recall_auc(ood_pred_probs, y_val_ood, AUCTHRESHS)
 
-        recalls_df = pd.concat([recalls_df, pd.DataFrame(recall)], axis=1)
-        precisions_df = pd.concat([precisions_df, pd.DataFrame(precision)], axis=1)
-        aucs_df = pd.concat([aucs_df, pd.DataFrame(auc)], axis=1)
+            recalls_df = pd.concat([recalls_df, pd.DataFrame(recall)], axis=1)
+            precisions_df = pd.concat([precisions_df, pd.DataFrame(precision)], axis=1)
+            aucs_df = pd.concat([aucs_df, pd.DataFrame(auc)], axis=1)
 
-        tmp = {'generation':trial,
-                  'ensemble_files':','.join(str(x) for x in indices)}
-        cluster_metrics = pd.DataFrame()
+            tmp = {'generation':trial,
+                      'ensemble_files':','.join(str(x) for x in indices)}
+            cluster_metrics = pd.DataFrame()
 
-        # Compute all Fitness Metrics
-        for label_flip in [0]: #[0, 1]:
-            print('Evaluating Prefixes')
-            for prefix_name in tqdm.tqdm(prefix_names):
-                print(f'{prefix_name}, {label_flip}')
-                # get clustering associated with data transformation
-                if 'synth' not in prefix_name:
-                    clusters_dict = all_clusters_dict[prefix_name]
-                    
-                if 'train' in prefix_name:
-                    if label_flip:
-                        Y = y_train_flipped
-                        prefix_name = prefix_name + '_flip'
+            # Compute all Fitness Metrics
+            for label_flip in [0]: #[0, 1]:
+                print('Evaluating Prefixes')
+                for prefix_name in tqdm.tqdm(prefix_names):
+                    print(f'{prefix_name}, {label_flip}')
+                    # get clustering associated with data transformation
+                    if 'synth' not in prefix_name:
+                        try:
+                            clusters_dict = all_clusters_dict[prefix_name]
+                        except Exception as e:
+                            print(e)
+                    if 'train' in prefix_name:
+                        if label_flip:
+                            Y = y_train_flipped
+                            prefix_name = prefix_name + '_flip'
+                        else:
+                            Y = y_train
+                            
+                    elif 'synth' in prefix_name:
+                        if label_flip:
+                            continue
+                        else:
+                            Y = synth_data_dict[prefix_name]
+
                     else:
-                        Y = y_train
-                        
-                elif 'synth' in prefix_name:
-                    if label_flip:
-                        continue
-                    else:
-                        Y = synth_data_dict[prefix_name]
+                        if label_flip:
+                            prefix_name = prefix_name + '_flip'
+                            Y = y_val_flipped
+                        else:
+                            Y = y_val_id
 
-                else:
-                    if label_flip:
-                        prefix_name = prefix_name + '_flip'
-                        Y = y_val_flipped
-                    else:
-                        Y = y_val_id
+                    try:
+                        model_pool_pred_probs = np.load(save_path + f'/{prefix_name}_pred_probs.npy')
+                        model_pool_preds = model_pool_pred_probs.argmax(axis=-1)
+                    except Exception as e:
+                        print(e)
 
-                try:
-                    model_pool_pred_probs = np.load(save_path + f'/{prefix_name}_pred_probs.npy')
-                    model_pool_preds = model_pool_pred_probs.argmax(axis=-1)
-                except Exception as e:
-                    print(e)
+                    model_pred_probs = model_pool_pred_probs[indices]
+                    model_preds = model_pred_probs.argmax(axis=-1)
 
-                model_pred_probs = model_pool_pred_probs[indices]
-                model_preds = model_pred_probs.argmax(axis=-1)
+                    # id val preds of sub-ensemble
+                    ensemble_preds, ensemble_pred_probs = get_ensemble_preds_from_models(model_pred_probs)
+                    metrics = EnsembleMetrics(Y, ensemble_preds, ensemble_pred_probs[:,1])
+                    diversity = EnsembleDiversity(Y, model_preds)
 
-                # id val preds of sub-ensemble
-                ensemble_preds, ensemble_pred_probs = get_ensemble_preds_from_models(model_pred_probs)
-                metrics = EnsembleMetrics(Y, ensemble_preds, ensemble_pred_probs[:,1])
-                diversity = EnsembleDiversity(Y, model_preds)
+                    tmp.update({f'{prefix_name}_acc':metrics.accuracy(),
+                           f'{prefix_name}_auc':metrics.auc(),
+                           f'{prefix_name}_prec':metrics.precision(),
+                           f'{prefix_name}_rec':metrics.recall(),
+                           f'{prefix_name}_f1':metrics.f1(),
+                           f'{prefix_name}_mae':metrics.mean_absolute_error(),
+                           f'{prefix_name}_mse':metrics.mean_squared_error(),
+                           f'{prefix_name}_logloss':metrics.log_loss(),
 
-                tmp.update({f'{prefix_name}_acc':metrics.accuracy(),
-                       f'{prefix_name}_auc':metrics.auc(),
-                       f'{prefix_name}_prec':metrics.precision(),
-                       f'{prefix_name}_rec':metrics.recall(),
-                       f'{prefix_name}_f1':metrics.f1(),
-                       f'{prefix_name}_mae':metrics.mean_absolute_error(),
-                       f'{prefix_name}_mse':metrics.mean_squared_error(),
-                       f'{prefix_name}_logloss':metrics.log_loss(),
+                           # diversity
+                           f'{prefix_name}_q_statistic':np.mean(diversity.q_statistic()),
+                           f'{prefix_name}_correlation_coefficient':np.mean(diversity.correlation_coefficient()),
+                           f'{prefix_name}_entropy':np.mean(diversity.entropy()),
+                           f'{prefix_name}_diversity_measure':diversity.diversity_measure(),
+                           f'{prefix_name}_hamming_distance':np.mean(diversity.hamming_distance()),
+                           f'{prefix_name}_error_rate':np.mean(diversity.error_rate()),
+                           f'{prefix_name}_auc':np.mean(diversity.auc()),
+                           f'{prefix_name}_brier_score':np.mean(diversity.brier_score()),
+                           f'{prefix_name}_ensemble_variance':np.mean(diversity.ensemble_variance()),
+                          })
 
-                       # diversity
-                       f'{prefix_name}_q_statistic':np.mean(diversity.q_statistic()),
-                       f'{prefix_name}_correlation_coefficient':np.mean(diversity.correlation_coefficient()),
-                       f'{prefix_name}_entropy':np.mean(diversity.entropy()),
-                       f'{prefix_name}_diversity_measure':diversity.diversity_measure(),
-                       f'{prefix_name}_hamming_distance':np.mean(diversity.hamming_distance()),
-                       f'{prefix_name}_error_rate':np.mean(diversity.error_rate()),
-                       f'{prefix_name}_auc':np.mean(diversity.auc()),
-                       f'{prefix_name}_brier_score':np.mean(diversity.brier_score()),
-                       f'{prefix_name}_ensemble_variance':np.mean(diversity.ensemble_variance()),
-                      })
+                    # compute cluster metrics
+                    tmp_cluster = compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y)
+                    del ensemble_preds, ensemble_pred_probs
+                    gc.collect()
 
-                # compute cluster metrics
-                tmp_cluster = compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y)
-                col_names = [prefix_name + '_' + x for x in tmp_cluster.columns]
-                col_names = [name.replace('_val_acc', '') for name in col_names]
-                col_names = [name.replace('_train_acc', '') for name in col_names]
-                tmp_cluster.columns = col_names
+                    col_names = [prefix_name + '_' + x for x in tmp_cluster.columns]
+                    col_names = [name.replace('_val_acc', '') for name in col_names]
+                    col_names = [name.replace('_train_acc', '') for name in col_names]
+                    tmp_cluster.columns = col_names
 
-                cluster_metrics = pd.concat([cluster_metrics, tmp_cluster], axis=1)
+                    cluster_metrics = pd.concat([cluster_metrics, tmp_cluster], axis=1)
+
+            raw_metrics = pd.DataFrame([tmp])    
+            tmp = pd.concat([raw_metrics, cluster_metrics], axis=1)
+            fitness_df = pd.concat([fitness_df, tmp])
+            precisions_df.to_csv(save_path+'/precisions_df.csv', index=False)
+            recalls_df.to_csv(save_path+'/recalls_df.csv', index=False)
+            aucs_df.to_csv(save_path+'/aucs_df.csv', index=False)
+            fitness_df.to_csv(save_path+'/fitness_df.csv', index=False)
+        return fitness_df, precisions_df, recalls_df, aucs_df
+        
+    fitness_df, precisions_df, recalls_df, aucs_df = run_random_search()
+    precisions_df.to_csv(save_path+'/precisions_df.csv', index=False)
+    recalls_df.to_csv(save_path+'/recalls_df.csv', index=False)
+    aucs_df.to_csv(save_path+'/aucs_df.csv', index=False)
+    fitness_df.to_csv(save_path+'/fitness_df.csv', index=False)
 
 
-        raw_metrics = pd.DataFrame([tmp])    
-        tmp = pd.concat([raw_metrics, cluster_metrics], axis=1)
-        fitness_df = pd.concat([fitness_df, tmp])
-        precisions_df.to_csv(save_path+'/precisions_df.csv', index=False)
-        recalls_df.to_csv(save_path+'/recalls_df.csv', index=False)
-        aucs_df.to_csv(save_path+'/aucs_df.csv', index=False)
-        fitness_df.to_csv(save_path+'/fitness_df.csv', index=False)
-    
         
