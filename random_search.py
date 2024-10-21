@@ -49,34 +49,30 @@ if __name__ == '__main__':
     parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Reliable Machine Learning/tableshift_datasets", help='Path to dataset')
     parser.add_argument("-dn", "--dataset_name", type=str, default="college_scorecard", help='Dataset Name')
     
-    parser.add_argument("--save_name", type=str, default=None, help="Save Name")
     parser.add_argument("--model_pool_path", type=str, default=None, help="Path to model pool pickle file")
     parser.add_argument("-sp", "--save_path", type=str, default='/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/data', help='save path')
+    parser.add_argument("-sd", "--seed", type=int, default=0, help="random seed")
         
     args = vars(parser.parse_args())
 
-    if args['save_name'] == None:
-        args['save_name'] = date.today().strftime('%Y%m%d')
-
     # create save directory for experiment
-    save_path = create_directory_if_not_exists(args['save_path'] + '/' + args['dataset_name'] + '/' + args['save_name'])
-    clusters_save_path = args['save_path'] + '/' +  args['dataset_name'] 
-    model_pool_save_path = args['save_path'] + '/' + args['dataset_name'] + '/model_pool.pkl'
+    save_path = create_directory_if_not_exists(args['save_path'] + '/' + args['dataset_name'])
     save_dict_to_file(args, save_path + '/experiment_args.txt')
 
 
     AUCTHRESHS = np.array([0.1, 0.2, 0.3, 0.4, 1. ])
 
+    rnd = np.random.RandomState(args['seed'])
     x_train, y_train, x_val_id, y_val_id, x_val_ood, y_val_ood = get_tableshift_dataset(args['dataset_path'] , args['dataset_name'])
-    sample_indices_train = np.random.choice(x_train.shape[0], size=min(x_train.shape[0], args['sample_size']), replace=True)
+    sample_indices_train = rnd.choice(x_train.shape[0], size=min(x_train.shape[0], args['sample_size']), replace=True)
     x_train = x_train[sample_indices_train]
     y_train = y_train[sample_indices_train]
 
-    sample_indices_val = np.random.choice(x_val_id.shape[0], size=min(x_val_id.shape[0], args['sample_size']), replace=True)
+    sample_indices_val = rnd.choice(x_val_id.shape[0], size=min(x_val_id.shape[0], args['sample_size']), replace=True)
     x_val_id = x_val_id[sample_indices_val]
     y_val_id = y_val_id[sample_indices_val]
 
-    sample_indices_ood = np.random.choice(x_val_ood.shape[0], size=min(x_val_ood.shape[0], args['sample_size']), replace=True)
+    sample_indices_ood = rnd.choice(x_val_ood.shape[0], size=min(x_val_ood.shape[0], args['sample_size']), replace=True)
     x_val_ood = x_val_ood[sample_indices_ood]
     y_val_ood = y_val_ood[sample_indices_ood]
 
@@ -112,7 +108,7 @@ if __name__ == '__main__':
 
         model_pool.train(x_train, y_train)
         print('saving_model_pool to ')
-        model_pool.save(model_pool_save_path)
+        model_pool.save(save_path + '/model_pool.pkl')
 
     
     # ###  Model Pool Predictions
@@ -140,8 +136,8 @@ if __name__ == '__main__':
 
     # ### Clustering Data into different groupings and preparing formating
     all_clusters_dict = {}
-    all_clusters_dict['train'], all_clusters_dict['val_id']  = get_clusters_dict(x_train, x_val_id, args['clusters_list'], clusters_save_path + '/default.pkl')
-    #all_clusters_dict = make_noise_preds(x_train, y_train, x_val_id, model_pool, args['shift_feature_count'], args['clusters_list'], all_clusters_dict, clusters_save_path, save_path)
+    all_clusters_dict['train'], all_clusters_dict['val_id']  = get_clusters_dict(x_train, x_val_id, args['clusters_list'], save_path + '/default.pkl')
+    all_clusters_dict = make_noise_preds(x_train, y_train, x_val_id, model_pool, args['shift_feature_count'], args['clusters_list'], all_clusters_dict, save_path)
 
     generator = SyntheticDataGenerator(x_train, y_train)
 

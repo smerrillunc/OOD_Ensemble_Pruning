@@ -519,7 +519,7 @@ def get_clusters_dict(x_train, x_val_id, clusters_list, save_path):
 
 
 
-def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count, clusters_list, all_clusters_dict, cluster_save_path, save_path):
+def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count, clusters_list, all_clusters_dict, save_path):
 
   # Convert x_train and y_train to DataFrames (assuming x_train has multiple features)
   x_train_df = pd.DataFrame(x_train)
@@ -549,140 +549,165 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
   val_noise = DataNoiseAdder(x_val_id)
 
   # ### Guassian Noise
-  x_train_noise = train_noise.add_gaussian_noise(add_nosie_feats_float)
-  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+  try:
+	  x_train_noise = train_noise.add_gaussian_noise(add_nosie_feats_float)
+	  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats_float)
-  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+	  x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats_float)
+	  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_gaussian'], all_clusters_dict['val_gaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/gaussian.pkl')
+	  all_clusters_dict['train_gaussian'], all_clusters_dict['val_gaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/gaussian.pkl')
 
-  np.save(save_path + '/train_gaussian_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save(save_path + '/val_gaussian_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-  del x_train_noise, x_val_noise
+	  np.save(save_path + '/train_gaussian_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save(save_path + '/val_gaussian_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
 
-  # ### Uniform Noise
-  x_train_noise = train_noise.add_uniform_noise(add_nosie_feats_float)
-  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+  #### Uniform Noise
+  try:
+	  x_train_noise = train_noise.add_uniform_noise(add_nosie_feats_float)
+	  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  x_val_noise = val_noise.add_uniform_noise(add_nosie_feats_float)
-  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+	  x_val_noise = val_noise.add_uniform_noise(add_nosie_feats_float)
+	  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_uniform'], all_clusters_dict['val_uniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/uniform.pkl')
+	  all_clusters_dict['train_uniform'], all_clusters_dict['val_uniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/uniform.pkl')
 
-  np.save(save_path + '/train_uniform_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save( save_path + '/val_uniform_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-  del x_train_noise, x_val_noise
+	  np.save(save_path + '/train_uniform_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save( save_path + '/val_uniform_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
 
   #### Laplace Noise
-  x_train_noise = train_noise.add_laplace_noise(add_nosie_feats_float)
-  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+  try:
+	  x_train_noise = train_noise.add_laplace_noise(add_nosie_feats_float)
+	  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  x_val_noise = val_noise.add_laplace_noise(add_nosie_feats_float)
-  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+	  x_val_noise = val_noise.add_laplace_noise(add_nosie_feats_float)
+	  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_laplace'], all_clusters_dict['val_laplace'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/laplace.pkl')
+	  all_clusters_dict['train_laplace'], all_clusters_dict['val_laplace'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/laplace.pkl')
 
-  np.save(save_path + '/train_laplace_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save(save_path + '/val_laplace_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-  del x_train_noise, x_val_noise
+	  np.save(save_path + '/train_laplace_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save(save_path + '/val_laplace_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
 
   #### Dropout Noise
-  x_train_noise = train_noise.add_dropout_noise(add_nosie_feats_float)
-  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+  try:
+	  x_train_noise = train_noise.add_dropout_noise(add_nosie_feats_float)
+	  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  x_val_noise = val_noise.add_dropout_noise(add_nosie_feats_float)
-  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+	  x_val_noise = val_noise.add_dropout_noise(add_nosie_feats_float)
+	  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_dropout'], all_clusters_dict['val_dropout'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/dropout.pkl')
+	  all_clusters_dict['train_dropout'], all_clusters_dict['val_dropout'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/dropout.pkl')
 
-  np.save(save_path + '/train_dropout_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save(save_path + '/val_dropout_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-  del x_train_noise, x_val_noise
+	  np.save(save_path + '/train_dropout_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save(save_path + '/val_dropout_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
 
   #### Boundary Shift
-  x_train_noise = train_noise.add_concept_shift(shift_type="boundary_shift",
-                                               shift_params={'feature_col':float_cols[0]})
-  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+  try:
+	  x_train_noise = train_noise.add_concept_shift(shift_type="boundary_shift",
+	                                               shift_params={'feature_col':float_cols[0]})
+	  x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  x_val_noise = val_noise.add_concept_shift(shift_type="boundary_shift",
-                                               shift_params={'feature_col':float_cols[0]})
-  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+	  x_val_noise = val_noise.add_concept_shift(shift_type="boundary_shift",
+	                                               shift_params={'feature_col':float_cols[0]})
+	  x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
 
-  all_clusters_dict['train_boundaryshift'], all_clusters_dict['val_boundaryshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/boundary.pkl')
+	  all_clusters_dict['train_boundaryshift'], all_clusters_dict['val_boundaryshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/boundary.pkl')
 
-  np.save(save_path + '/train_boundaryshift_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save(save_path + '/val_boundaryshift_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-  del x_train_noise, x_val_noise
+	  np.save(save_path + '/train_boundaryshift_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save(save_path + '/val_boundaryshift_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
 
   #### Scaling Shift
-  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='scaling',
-                                  shift_params = {'scale_factor':1.2})
+  try:
+	  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='scaling',
+	                                  shift_params = {'scale_factor':1.2})
 
 
-  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='scaling',
-                                  shift_params = {'scale_factor':1.2})
+	  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='scaling',
+	                                  shift_params = {'scale_factor':1.2})
 
-  all_clusters_dict['train_upscaleshift'], all_clusters_dict['val_upscaleshift']  = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/upscale.pkl')
+	  all_clusters_dict['train_upscaleshift'], all_clusters_dict['val_upscaleshift']  = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/upscale.pkl')
 
-  np.save(save_path + '/train_upscaleshift_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save(save_path + '/val_upscaleshift_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-  del x_train_noise, x_val_noise
+	  np.save(save_path + '/train_upscaleshift_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save(save_path + '/val_upscaleshift_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
+
+  try:
+	  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='scaling',
+	                                  shift_params = {'scale_factor':0.8})
 
 
-  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='scaling',
-                                  shift_params = {'scale_factor':0.8})
+	  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='scaling',
+	                                shift_params = {'scale_factor':0.8})
 
+	  all_clusters_dict['train_downscaleshift'], all_clusters_dict['val_downscaleshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/downscale.pkl')
 
-  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='scaling',
-                                shift_params = {'scale_factor':0.8})
-
-  all_clusters_dict['train_downscaleshift'], all_clusters_dict['val_downscaleshift'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/downscale.pkl')
-
-  np.save(save_path + '/train_downscaleshift_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save(save_path + '/val_downscaleshift_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-  del x_train_noise, x_val_noise
-
+	  np.save(save_path + '/train_downscaleshift_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save(save_path + '/val_downscaleshift_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
 
   ### Distribution shift
-  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='distribution',
-                                  shift_params = {'dist_type':'uniform'})
-  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='distribution',
-                                  shift_params = {'dist_type':'uniform'})
+  try:
+	  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='distribution',
+	                                  shift_params = {'dist_type':'uniform'})
+	  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='distribution',
+	                                  shift_params = {'dist_type':'uniform'})
 
-  all_clusters_dict['train_distshiftuniform'], all_clusters_dict['val_distshiftuniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/distuniform.pkl')
+	  all_clusters_dict['train_distshiftuniform'], all_clusters_dict['val_distshiftuniform'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/distuniform.pkl')
 
-  np.save(save_path + '/train_distshiftuniform_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save(save_path + '/val_distshiftuniform_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-  del x_train_noise, x_val_noise
+	  np.save(save_path + '/train_distshiftuniform_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save(save_path + '/val_distshiftuniform_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
+
+  try:
+	  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='distribution',
+	                                  shift_params = {'dist_type':'normal'})
 
 
-  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='distribution',
-                                  shift_params = {'dist_type':'normal'})
+	  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='distribution',
+	                                  shift_params = {'dist_type':'normal'})
 
+	  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='distribution',
+	                                  shift_params = {'dist_type':'uniform'}) 
+	  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+	                                  shift_type='distribution',
+	                                  shift_params = {'dist_type':'uniform'})
 
-  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='distribution',
-                                  shift_params = {'dist_type':'normal'})
+	  all_clusters_dict['train_distshiftgaussian'], all_clusters_dict['val_distshiftgaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, save_path + '/distgaussian.pkl')
+	  
+	  np.save(save_path + '/train_distshiftgaussian_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
+	  np.save(save_path + '/val_distshiftgaussian_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
 
-  x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='distribution',
-                                  shift_params = {'dist_type':'uniform'}) 
-  x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
-                                  shift_type='distribution',
-                                  shift_params = {'dist_type':'uniform'})
+	  del x_train_noise, x_val_noise
+  except Exception as e:
+  	print(e)
 
-  all_clusters_dict['train_distshiftgaussian'], all_clusters_dict['val_distshiftgaussian'] = get_clusters_dict(x_train_noise, x_val_noise, clusters_list, cluster_save_path + '/distgaussian.pkl')
-  
-  np.save(save_path + '/train_distshiftgaussian_pred_probs.npy', model_pool.get_individual_probabilities(x_train_noise))
-  np.save(save_path + '/val_distshiftgaussian_pred_probs.npy', model_pool.get_individual_probabilities(x_val_noise))
-
-  del x_train_noise, x_val_noise
   return all_clusters_dict
