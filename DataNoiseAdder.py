@@ -6,6 +6,7 @@ import random
 class DataNoiseAdder:
     def __init__(self, data, seed=1):
         self.data = data.copy()
+        self.categorical_features, self.float_features = self.get_categorical_and_float_features()
         self.seed = seed
 
     def set_random_seeds(self):
@@ -39,6 +40,30 @@ class DataNoiseAdder:
         
         return flipped_array
 
+    def get_categorical_and_float_features(self, unique_threshold=10):
+        """
+        Separate categorical and float features based on the number of unique values.
+        
+        - data: numpy array (rows: samples, cols: features)
+        - unique_threshold: max number of unique values to consider a feature as categorical
+        
+        Returns:
+        - categorical_features: list of indices for categorical features
+        - float_features: list of indices for float (continuous) features
+        """
+        categorical_features = []
+        float_features = []
+
+        # Iterate over each column
+        for col in range(self.data.shape[1]):
+            unique_values = np.unique(self.data[:, col])
+            if len(unique_values) <= unique_threshold:
+                categorical_features.append(col)  # Consider it categorical if the unique values are below the threshold
+            else:
+                float_features.append(col)  # Otherwise, it's treated as a float/continuous feature
+
+        return categorical_features, float_features
+
 
     def add_concept_shift(self, shift_type="boundary_shift", shift_params=None):
         """
@@ -59,6 +84,8 @@ class DataNoiseAdder:
             original_threshold = np.median(self.data[:, feature_col])
             new_threshold = original_threshold + threshold_shift
 
+            if feature_col in self.categorical_features:
+                new_threshold = round(new_threshold, 0)
             #print(f"Original threshold: {original_threshold}, New threshold: {new_threshold}")
 
             # Reassign labels based on the new, shifted threshold
@@ -81,16 +108,32 @@ class DataNoiseAdder:
             # Apply a scaling factor to the selected features
             scale_factor = shift_params.get("scale_factor", 1.2)
             for col in columns:
-                self.data[:, col] *= scale_factor
+                if col in self.float_features:
+                    self.data[:, col] *= scale_factor
+                else:
+                    unique_categories = np.unique(self.data[:, col])  # Get unique categories in the column
+                    self.data[:, col] = np.random.choice(unique_categories, size=len(self.data))  # Randomly assign categories
+
+
         elif shift_type == "distribution":
             # Sample from a different distribution (e.g., Uniform instead of Gaussian)
             dist_type = shift_params.get("dist_type", "uniform")
             if dist_type == "uniform":
                 for col in columns:
-                    self.data[:, col] = np.random.uniform(np.min(self.data[:, col]), np.max(self.data[:, col]), size=len(self.data))
+                    if col in self.float_features:
+                        self.data[:, col] = np.random.uniform(np.min(self.data[:, col]), np.max(self.data[:, col]), size=len(self.data))
+                    else:
+                        unique_categories = np.unique(self.data[:, col])  # Get unique categories in the column
+                        self.data[:, col] = np.random.choice(unique_categories, size=len(self.data))  # Randomly assign categories
+
             elif dist_type == "normal":
                 for col in columns:
-                    self.data[:, col] = np.random.normal(np.mean(self.data[:, col]), np.std(self.data[:, col]), size=len(self.data))
+                    if col in self.float_features:
+                        self.data[:, col] = np.random.normal(np.mean(self.data[:, col]), np.std(self.data[:, col]), size=len(self.data))
+                    else:
+                        unique_categories = np.unique(self.data[:, col])  # Get unique categories in the column
+                        self.data[:, col] = np.random.choice(unique_categories, size=len(self.data))  # Randomly assign categories
+
         elif shift_type == "noise":
             # Add noise from a different distribution (e.g., Uniform noise instead of Gaussian)
             noise_type = shift_params.get("noise_type", "uniform")
@@ -108,32 +151,58 @@ class DataNoiseAdder:
     def add_gaussian_noise(self, columns, std_dev=1.0):
         self.set_random_seeds()
         for col in columns:
-            self.data[:, col] += np.random.normal(0, std_dev, size=len(self.data))
+            if col in self.float_features:
+                self.data[:, col] += np.random.normal(0, std_dev, size=len(self.data))
+            else:
+                unique_categories = np.unique(self.data[:, col])  # Get unique categories in the column
+                self.data[:, col] = np.random.choice(unique_categories, size=len(self.data))  # Randomly assign categories
+
+
         return self.data
 
     def add_laplace_noise(self, columns, scale=1.0):
         self.set_random_seeds()
         for col in columns:
-            self.data[:, col] += np.random.laplace(0, scale, size=len(self.data))
+            if col in self.float_features:
+                self.data[:, col] += np.random.laplace(0, scale, size=len(self.data))
+            else:
+                unique_categories = np.unique(self.data[:, col])  # Get unique categories in the column
+                self.data[:, col] = np.random.choice(unique_categories, size=len(self.data))  # Randomly assign categories
+
         return self.data
 
     def add_uniform_noise(self, columns, noise_range=(-1, 1)):
         self.set_random_seeds()
         for col in columns:
-            self.data[:, col] += np.random.uniform(noise_range[0], noise_range[1], size=len(self.data))
+            if col in self.float_features:
+                self.data[:, col] += np.random.uniform(noise_range[0], noise_range[1], size=len(self.data))
+            else:
+                unique_categories = np.unique(self.data[:, col])  # Get unique categories in the column
+                self.data[:, col] = np.random.choice(unique_categories, size=len(self.data))  # Randomly assign categories
+
         return self.data
 
     def add_multiplicative_noise(self, columns, factor_range=(0.9, 1.1)):
         self.set_random_seeds()
         for col in columns:
-            self.data[:, col] *= np.random.uniform(factor_range[0], factor_range[1], size=len(self.data))
+            if col in self.float_features:
+                self.data[:, col] *= np.random.uniform(factor_range[0], factor_range[1], size=len(self.data))
+            else:
+                unique_categories = np.unique(self.data[:, col])  # Get unique categories in the column
+                self.data[:, col] = np.random.choice(unique_categories, size=len(self.data))  # Randomly assign categories
+
         return self.data
 
     def add_dropout_noise(self, columns, dropout_prob=0.1, null_value=0):
         self.set_random_seeds()
         for col in columns:
-            mask = np.random.rand(len(self.data)) < dropout_prob
-            self.data[mask, col] = null_value
+            if col in self.float_features:
+                mask = np.random.rand(len(self.data)) < dropout_prob
+                self.data[mask, col] = null_value
+            else:
+                unique_categories = np.unique(self.data[:, col])  # Get unique categories in the column
+                self.data[:, col] = np.random.choice(unique_categories, size=len(self.data))  # Randomly assign categories
+
         return self.data
 
     def add_categorical_noise(self, columns, noise_prob=0.1):

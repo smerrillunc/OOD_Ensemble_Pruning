@@ -732,13 +732,7 @@ def make_noise(x_train, x_val_id, y_train, shift_feature_count, prefix_name):
   # Sort correlations in descending order
   sorted_correlations = correlations_with_target.abs().sort_values(ascending=False)
 
-  # we ill add noise to these features
-  categorical_cols, float_cols = get_categorical_and_float_features(x_train)
-
   add_nosie_feats = sorted_correlations.index[:shift_feature_count ]
-
-  add_nosie_feats_float = [x for x in add_nosie_feats if x in float_cols]
-  add_nosie_feats_categorical = [x for x in add_nosie_feats if x in categorical_cols]
 
   train_noise = DataNoiseAdder(x_train)
   val_noise = DataNoiseAdder(x_val_id)
@@ -748,81 +742,69 @@ def make_noise(x_train, x_val_id, y_train, shift_feature_count, prefix_name):
 
   # ### Guassian Noise
   if prefix_name == 'gaussian':
-    x_train_noise = train_noise.add_gaussian_noise(add_nosie_feats_float)
-    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
-
-    x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats_float)
-    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+    if len(add_nosie_feats_float):
+        x_train_noise = train_noise.add_gaussian_noise(add_nosie_feats)
+        x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats)
 
   elif prefix_name == 'uniform':
-    x_train_noise = train_noise.add_uniform_noise(add_nosie_feats_float)
-    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+    x_train_noise = train_noise.add_uniform_noise(add_nosie_feats)
+    x_val_noise = val_noise.add_uniform_noise(add_nosie_feats)
 
-    x_val_noise = val_noise.add_uniform_noise(add_nosie_feats_float)
-    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
   elif prefix_name == 'laplace':
-    x_train_noise = train_noise.add_laplace_noise(add_nosie_feats_float)
-    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
-
-    x_val_noise = val_noise.add_laplace_noise(add_nosie_feats_float)
-    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+    x_train_noise = train_noise.add_laplace_noise(add_nosie_feats)
+    x_val_noise = val_noise.add_laplace_noise(add_nosie_feats)
   elif prefix_name == 'dropout':
-    x_train_noise = train_noise.add_dropout_noise(add_nosie_feats_float)
-    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
-
-    x_val_noise = val_noise.add_dropout_noise(add_nosie_feats_float)
-    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+    x_train_noise = train_noise.add_dropout_noise(add_nosie_feats)
+    x_val_noise = val_noise.add_dropout_noise(add_nosie_feats)
   elif prefix_name == 'boundary_shift':
 
     #### Boundary Shift
     x_train_noise = train_noise.add_concept_shift(shift_type="boundary_shift",
-                                                 shift_params={'feature_col':float_cols[0]})
-    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+                                                 shift_params={'feature_col':add_nosie_feats[0]})
 
     x_val_noise = val_noise.add_concept_shift(shift_type="boundary_shift",
-                                                 shift_params={'feature_col':float_cols[0]})
-    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+                                                 shift_params={'feature_col':add_nosie_feats[0]})
 
   #### Scaling Shift
   elif prefix_name == 'upscaleshift':
-    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats, 
                                     shift_type='scaling',
                                     shift_params = {'scale_factor':1.2})
 
 
-    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats, 
                                   shift_type='scaling',
                                   shift_params = {'scale_factor':1.2})
 
   elif prefix_name == 'downscaleshift':
 
-    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats, 
                                     shift_type='scaling',
                                     shift_params = {'scale_factor':0.8})
 
 
-    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats, 
                                     shift_type='scaling',
                                   shift_params = {'scale_factor':0.8})
 
   elif prefix_name == 'distshiftuniform':
     ### Distribution shift
-    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats, 
                                     shift_type='distribution',
                                     shift_params = {'dist_type':'uniform'})
-    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats, 
                                     shift_type='distribution',
                                     shift_params = {'dist_type':'uniform'})
 
   elif prefix_name == 'distshiftgaussian':
 
 
-    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats, 
                                     shift_type='distribution',
                                     shift_params = {'dist_type':'normal'})
 
 
-    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats, 
                                     shift_type='distribution',
                                     shift_params = {'dist_type':'normal'})
   else:

@@ -19,6 +19,8 @@ class Clustering:
         :param data: A 2D numpy array or pandas DataFrame of shape (n_samples, n_features).
         """
         self.data = data
+        self.data = np.clip(self.data, -1e10, 1e10)
+
         self.labels = None
         self.seed = seed
 
