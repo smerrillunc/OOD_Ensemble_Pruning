@@ -26,6 +26,7 @@ from datetime import date
 import warnings
 import pickle
 import gc
+import os
 
 warnings.filterwarnings('ignore')
 
@@ -56,7 +57,10 @@ if __name__ == '__main__':
     args = vars(parser.parse_args())
 
     # create save directory for experiment
-    save_path = create_directory_if_not_exists(args['save_path'] + '/' + args['dataset_name'])
+    save_path = args['save_path'] + '/' + args['dataset_name']
+    os.makedirs(save_path, exist_ok=True)
+    os.makedirs(save_path + '/fitness_metrics', exist_ok=True)
+
     save_dict_to_file(args, save_path + '/experiment_args.txt')
 
 
@@ -179,60 +183,47 @@ if __name__ == '__main__':
 
     @profile
     def run_random_search():
-        precisions_df = pd.DataFrame()
-        recalls_df = pd.DataFrame()
-        aucs_df = pd.DataFrame()
-        fitness_df = pd.DataFrame()
-
         print("Start random search")
+        
         for trial in tqdm.tqdm(range(args['ntrls'])):
             indices = np.random.choice(model_pool.num_classifiers, size=args['ensemble_size'], replace=True)
-
-            # ood preds of sub-ensemble
+            
+            # Get ensemble predictions
             ood_preds, ood_pred_probs = get_ensemble_preds_from_models(model_pool.val_ood_pred_probs[indices])
-
-            # save OOD precision/recalls seprately
+            
+            # Compute precision, recall, and AUC
             precision, recall, auc = get_precision_recall_auc(ood_pred_probs, y_val_ood, AUCTHRESHS)
-
-            recalls_df = pd.concat([recalls_df, pd.DataFrame(recall)], axis=1)
-            precisions_df = pd.concat([precisions_df, pd.DataFrame(precision)], axis=1)
-            aucs_df = pd.concat([aucs_df, pd.DataFrame(auc)], axis=1)
-
-            tmp = {'generation':trial,
-                      'ensemble_files':','.join(str(x) for x in indices)}
-            cluster_metrics = pd.DataFrame()
-
-            # Compute all Fitness Metrics
-            for label_flip in [0]: #[0, 1]:
+            
+            # Append precision, recall, and AUC to corresponding CSV files
+            pd.DataFrame(precision).to_csv(save_path + '/precisions_df.csv', mode='a', header=False, index=False)
+            pd.DataFrame(recall).to_csv(save_path + '/recalls_df.csv', mode='a', header=False, index=False)
+            pd.DataFrame(auc).to_csv(save_path + '/aucs_df.csv', mode='a', header=False, index=False)
+            
+            # Simplified string join, reduced memory usage
+            ensemble_files_str = ','.join(map(str, indices))
+            base_tmp = {'generation': trial, 'ensemble_files': ensemble_files_str}
+            
+            for label_flip in [0]:  # [0, 1]
                 print('Evaluating Prefixes')
                 for prefix_name in tqdm.tqdm(prefix_names):
                     print(f'{prefix_name}, {label_flip}')
-                    # get clustering associated with data transformation
+                    
                     if 'synth' not in prefix_name:
                         try:
                             clusters_dict = all_clusters_dict[prefix_name]
                         except Exception as e:
                             print(e)
+                    
                     if 'train' in prefix_name:
-                        if label_flip:
-                            Y = y_train_flipped
-                            prefix_name = prefix_name + '_flip'
-                        else:
-                            Y = y_train
-                            
+                        Y = y_train_flipped if label_flip else y_train
                     elif 'synth' in prefix_name:
                         if label_flip:
                             continue
                         else:
                             Y = synth_data_dict[prefix_name]
-
                     else:
-                        if label_flip:
-                            prefix_name = prefix_name + '_flip'
-                            Y = y_val_flipped
-                        else:
-                            Y = y_val_id
-
+                        Y = y_val_flipped if label_flip else y_val_id
+                    
                     try:
                         model_pool_pred_probs = np.load(save_path + f'/{prefix_name}_pred_probs.npy')
                         model_pool_preds = model_pool_pred_probs.argmax(axis=-1)
@@ -242,58 +233,58 @@ if __name__ == '__main__':
                     model_pred_probs = model_pool_pred_probs[indices]
                     model_preds = model_pred_probs.argmax(axis=-1)
 
-                    # id val preds of sub-ensemble
+                    # Get ensemble predictions and metrics
                     ensemble_preds, ensemble_pred_probs = get_ensemble_preds_from_models(model_pred_probs)
-                    metrics = EnsembleMetrics(Y, ensemble_preds, ensemble_pred_probs[:,1])
+                    metrics = EnsembleMetrics(Y, ensemble_preds, ensemble_pred_probs[:, 1])
                     diversity = EnsembleDiversity(Y, model_preds)
-
-                    tmp.update({f'{prefix_name}_acc':metrics.accuracy(),
-                           f'{prefix_name}_auc':metrics.auc(),
-                           f'{prefix_name}_prec':metrics.precision(),
-                           f'{prefix_name}_rec':metrics.recall(),
-                           f'{prefix_name}_f1':metrics.f1(),
-                           f'{prefix_name}_mae':metrics.mean_absolute_error(),
-                           f'{prefix_name}_mse':metrics.mean_squared_error(),
-                           f'{prefix_name}_logloss':metrics.log_loss(),
-
-                           # diversity
-                           f'{prefix_name}_q_statistic':np.mean(diversity.q_statistic()),
-                           f'{prefix_name}_correlation_coefficient':np.mean(diversity.correlation_coefficient()),
-                           f'{prefix_name}_entropy':np.mean(diversity.entropy()),
-                           f'{prefix_name}_diversity_measure':diversity.diversity_measure(),
-                           f'{prefix_name}_hamming_distance':np.mean(diversity.hamming_distance()),
-                           f'{prefix_name}_error_rate':np.mean(diversity.error_rate()),
-                           f'{prefix_name}_auc':np.mean(diversity.auc()),
-                           f'{prefix_name}_brier_score':np.mean(diversity.brier_score()),
-                           f'{prefix_name}_ensemble_variance':np.mean(diversity.ensemble_variance()),
-                          })
-
-                    # compute cluster metrics
+                    
+                    # Collect metrics in the `tmp` dict (specific to this prefix)
+                    tmp = base_tmp.copy()
+                    tmp.update({
+                        f'{prefix_name}_acc': metrics.accuracy(),
+                        f'{prefix_name}_auc': metrics.auc(),
+                        f'{prefix_name}_prec': metrics.precision(),
+                        f'{prefix_name}_rec': metrics.recall(),
+                        f'{prefix_name}_f1': metrics.f1(),
+                        f'{prefix_name}_mae': metrics.mean_absolute_error(),
+                        f'{prefix_name}_mse': metrics.mean_squared_error(),
+                        f'{prefix_name}_logloss': metrics.log_loss(),
+                        # Diversity metrics
+                        f'{prefix_name}_q_statistic': np.mean(diversity.q_statistic()),
+                        f'{prefix_name}_correlation_coefficient': np.mean(diversity.correlation_coefficient()),
+                        f'{prefix_name}_entropy': np.mean(diversity.entropy()),
+                        f'{prefix_name}_diversity_measure': diversity.diversity_measure(),
+                        f'{prefix_name}_hamming_distance': np.mean(diversity.hamming_distance()),
+                        f'{prefix_name}_error_rate': np.mean(diversity.error_rate()),
+                        f'{prefix_name}_brier_score': np.mean(diversity.brier_score()),
+                        f'{prefix_name}_ensemble_variance': np.mean(diversity.ensemble_variance())
+                    })
+                    
+                    # Compute cluster metrics
                     tmp_cluster = compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y)
+                    
+                    # Clean up memory
                     del ensemble_preds, ensemble_pred_probs
                     gc.collect()
 
+                    # Batch processing column name replacement
                     col_names = [prefix_name + '_' + x for x in tmp_cluster.columns]
-                    col_names = [name.replace('_val_acc', '') for name in col_names]
-                    col_names = [name.replace('_train_acc', '') for name in col_names]
+                    col_names = [name.replace('_val_acc', '').replace('_train_acc', '') for name in col_names]
                     tmp_cluster.columns = col_names
+                    
+                    # Append cluster metrics to a CSV
+                    tmp_cluster.to_csv(save_path + '/fitness_metrics/{prefix_name}_cluster.csv', mode='a', header=False, index=False)
+                    
+                    # Save the current tmp dictionary to a file specific to the prefix
+                    raw_metrics = pd.DataFrame([tmp])
+                    raw_metrics.to_csv(save_path + f'/fitness_metrics/{prefix_name}.csv', mode='a', header=False, index=False)
 
-                    cluster_metrics = pd.concat([cluster_metrics, tmp_cluster], axis=1)
+        print("Random search complete")
+        return None
 
-            raw_metrics = pd.DataFrame([tmp])    
-            tmp = pd.concat([raw_metrics, cluster_metrics], axis=1)
-            fitness_df = pd.concat([fitness_df, tmp])
-            precisions_df.to_csv(save_path+'/precisions_df.csv', index=False)
-            recalls_df.to_csv(save_path+'/recalls_df.csv', index=False)
-            aucs_df.to_csv(save_path+'/aucs_df.csv', index=False)
-            fitness_df.to_csv(save_path+'/fitness_df.csv', index=False)
-        return fitness_df, precisions_df, recalls_df, aucs_df
-        
-    fitness_df, precisions_df, recalls_df, aucs_df = run_random_search()
+
+
+    _ = run_random_search()
     precisions_df.to_csv(save_path+'/precisions_df.csv', index=False)
-    recalls_df.to_csv(save_path+'/recalls_df.csv', index=False)
-    aucs_df.to_csv(save_path+'/aucs_df.csv', index=False)
-    fitness_df.to_csv(save_path+'/fitness_df.csv', index=False)
-
 
         

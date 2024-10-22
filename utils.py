@@ -6,14 +6,14 @@ import random
 import numbers
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
+from EnsembleDiversity import EnsembleDiversity
+from EnsembleMetrics import EnsembleMetrics
 
 from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from scipy.integrate import trapezoid
 from joblib import load, dump
 from time import sleep
-from EnsembleMetrics import EnsembleMetrics
-from EnsembleDiversity import EnsembleDiversity
 from Clustering import Clustering
 from DataNoiseAdder import DataNoiseAdder
 
@@ -286,10 +286,11 @@ def compute_metrics_in_buckets(predictions, model_preds, probabilities, labels, 
     labels = np.array(labels)
     buckets = np.array(buckets)
     probabilities = np.array(probabilities) if probabilities is not None else None
-    
+
+
     # Get unique buckets
     unique_buckets = np.unique(buckets)
-    
+
     # Dictionary to store the metrics for each bucket
     bucket_metrics = {}
 
@@ -297,7 +298,7 @@ def compute_metrics_in_buckets(predictions, model_preds, probabilities, labels, 
     for bucket in unique_buckets:
         # Get the indices of the data points in this bucket
         bucket_indices = np.where(buckets == bucket)[0]
-        
+
         if len(bucket_indices) < 10:
             # minimum bucket size
             continue
@@ -352,6 +353,7 @@ def compute_metrics_in_buckets(predictions, model_preds, probabilities, labels, 
          f'std':col_std,
         }, index=[col])
         output = pd.concat([output, col_row])
+
     return output
 
 
@@ -416,8 +418,8 @@ def compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pr
     output = pd.DataFrame()
     
     for prefix, labels in clusters_dict.items():
-        prefix = prefix.replace('_val','')
-        prefix = prefix.replace('_train','')
+        #prefix = prefix.replace('_val','')
+        #prefix = prefix.replace('_train','')
         tmp = compute_metrics_in_buckets(ensemble_preds, model_preds, model_pred_probs[:,:,1], Y, labels)
         output = pd.concat([output, flatten_df(tmp, prefix)], axis=1)
     
@@ -711,3 +713,120 @@ def make_noise_preds(x_train, y_train, x_val_id, model_pool, shift_feature_count
   	print(e)
 
   return all_clusters_dict
+
+
+def make_noise(x_train, x_val_id, y_train, shift_feature_count, prefix_name):
+  # Convert x_train and y_train to DataFrames (assuming x_train has multiple features)
+  x_train_df = pd.DataFrame(x_train)
+  y_train_df = pd.Series(y_train)
+
+  # Concatenate x_train_df and y_train_df
+  data = pd.concat([x_train_df, y_train_df], axis=1)
+
+  # Calculate correlation matrix
+  correlation_matrix = data.corr()
+
+  # Extract correlations between each feature and the target variable (y_train is the last column)
+  correlations_with_target = correlation_matrix.iloc[:-1, -1]
+
+  # Sort correlations in descending order
+  sorted_correlations = correlations_with_target.abs().sort_values(ascending=False)
+
+  # we ill add noise to these features
+  categorical_cols, float_cols = get_categorical_and_float_features(x_train)
+
+  add_nosie_feats = sorted_correlations.index[:shift_feature_count ]
+
+  add_nosie_feats_float = [x for x in add_nosie_feats if x in float_cols]
+  add_nosie_feats_categorical = [x for x in add_nosie_feats if x in categorical_cols]
+
+  train_noise = DataNoiseAdder(x_train)
+  val_noise = DataNoiseAdder(x_val_id)
+
+  if prefix_name == 'default':
+    return x_train, x_val_id
+
+  # ### Guassian Noise
+  if prefix_name == 'gaussian':
+    x_train_noise = train_noise.add_gaussian_noise(add_nosie_feats_float)
+    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+    x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats_float)
+    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  elif prefix_name == 'uniform':
+    x_train_noise = train_noise.add_uniform_noise(add_nosie_feats_float)
+    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+    x_val_noise = val_noise.add_uniform_noise(add_nosie_feats_float)
+    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+  elif prefix_name == 'laplace':
+    x_train_noise = train_noise.add_laplace_noise(add_nosie_feats_float)
+    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+    x_val_noise = val_noise.add_laplace_noise(add_nosie_feats_float)
+    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+  elif prefix_name == 'dropout':
+    x_train_noise = train_noise.add_dropout_noise(add_nosie_feats_float)
+    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+    x_val_noise = val_noise.add_dropout_noise(add_nosie_feats_float)
+    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+  elif prefix_name == 'boundary_shift':
+
+    #### Boundary Shift
+    x_train_noise = train_noise.add_concept_shift(shift_type="boundary_shift",
+                                                 shift_params={'feature_col':float_cols[0]})
+    x_train_noise = train_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+    x_val_noise = val_noise.add_concept_shift(shift_type="boundary_shift",
+                                                 shift_params={'feature_col':float_cols[0]})
+    x_val_noise = val_noise.add_categorical_noise(add_nosie_feats_categorical)
+
+  #### Scaling Shift
+  elif prefix_name == 'upscaleshift':
+    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                    shift_type='scaling',
+                                    shift_params = {'scale_factor':1.2})
+
+
+    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                  shift_type='scaling',
+                                  shift_params = {'scale_factor':1.2})
+
+  elif prefix_name == 'downscaleshift':
+
+    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                    shift_type='scaling',
+                                    shift_params = {'scale_factor':0.8})
+
+
+    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                    shift_type='scaling',
+                                  shift_params = {'scale_factor':0.8})
+
+  elif prefix_name == 'distshiftuniform':
+    ### Distribution shift
+    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                    shift_type='distribution',
+                                    shift_params = {'dist_type':'uniform'})
+    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                    shift_type='distribution',
+                                    shift_params = {'dist_type':'uniform'})
+
+  elif prefix_name == 'distshiftgaussian':
+
+
+    x_train_noise = train_noise.add_covariate_shift(add_nosie_feats_float, 
+                                    shift_type='distribution',
+                                    shift_params = {'dist_type':'normal'})
+
+
+    x_val_noise = val_noise.add_covariate_shift(add_nosie_feats_float, 
+                                    shift_type='distribution',
+                                    shift_params = {'dist_type':'normal'})
+  else:
+      print("Noise method not yet implemented")
+      return 1
+
+  return x_train_noise, x_val_noise
