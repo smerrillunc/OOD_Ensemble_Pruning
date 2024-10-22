@@ -106,6 +106,11 @@ if __name__ == '__main__':
 
     # 1. Apply Transformation
     x_train, x_val_id = make_noise(x_train, x_val_id, y_train,args['shift_feature_count'], prefix_name)
+    float16_min = np.finfo(np.float16).min  # Smallest (most negative) float16 value    
+    float16_max = np.finfo(np.float16).max  # Largest float16 value
+
+    x_train = np.clip(x_train, float16_min, float16_max)
+    x_val_id = np.clip(x_val_id, float16_min, float16_max)
 
     ### 2. Get Cluster dict
     all_clusters_dict = {}

@@ -742,9 +742,8 @@ def make_noise(x_train, x_val_id, y_train, shift_feature_count, prefix_name):
 
   # ### Guassian Noise
   if prefix_name == 'gaussian':
-    if len(add_nosie_feats_float):
-        x_train_noise = train_noise.add_gaussian_noise(add_nosie_feats)
-        x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats)
+    x_train_noise = train_noise.add_gaussian_noise(add_nosie_feats)
+    x_val_noise = val_noise.add_gaussian_noise(add_nosie_feats)
 
   elif prefix_name == 'uniform':
     x_train_noise = train_noise.add_uniform_noise(add_nosie_feats)
@@ -753,11 +752,12 @@ def make_noise(x_train, x_val_id, y_train, shift_feature_count, prefix_name):
   elif prefix_name == 'laplace':
     x_train_noise = train_noise.add_laplace_noise(add_nosie_feats)
     x_val_noise = val_noise.add_laplace_noise(add_nosie_feats)
+
   elif prefix_name == 'dropout':
     x_train_noise = train_noise.add_dropout_noise(add_nosie_feats)
     x_val_noise = val_noise.add_dropout_noise(add_nosie_feats)
-  elif prefix_name == 'boundary_shift':
 
+  elif prefix_name == 'boundary_shift':
     #### Boundary Shift
     x_train_noise = train_noise.add_concept_shift(shift_type="boundary_shift",
                                                  shift_params={'feature_col':add_nosie_feats[0]})
