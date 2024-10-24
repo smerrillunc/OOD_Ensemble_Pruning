@@ -83,3 +83,24 @@ if __name__ == '__main__':
     model_pool.train(x_train, y_train)
     print('saving_model_pool to ')
     model_pool.save(save_path + '/model_pool.pkl')
+
+    del x_train, y_train
+    gc.collect()
+    
+    # save model pool precision and recalls
+    print("Getting and saving MP precision, recall and auc")
+    _, _, _, _, x_val_ood, y_val_ood = get_tableshift_dataset(args['dataset_path'] , args['dataset_name'])
+
+    # ###  Model Pool Predictions
+    model_pool_preds = model_pool.predict(x_val_ood)
+    model_pool_pred_probs = model_pool.predict_proba(x_val_ood)
+    mp_precision, mp_recall, mp_auc = get_precision_recall_auc(model_pool_pred_probs, y_val_ood, AUCTHRESHS)
+    
+    with open(save_path + f'/model_pool_precision.pkl', 'wb') as file:
+        pickle.dump(mp_precision, file)
+
+    with open(save_path + f'/model_pool_recall.pkl', 'wb') as file:
+        pickle.dump(mp_recall, file)
+
+    with open(save_path + f'/model_pool_auc.pkl', 'wb') as file:
+        pickle.dump(mp_auc, file)
