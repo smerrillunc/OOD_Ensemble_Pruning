@@ -66,6 +66,8 @@ if __name__ == '__main__':
     save_dict_to_file(args, save_path + '/experiment_args.txt')
 
     AUCTHRESHS = np.array([0.1, 0.2, 0.3, 0.4, 1. ])
+    float16_min = np.finfo(np.float16).min  # Smallest (most negative) float16 value    
+    float16_max = np.finfo(np.float16).max  # Largest float16 value
 
     rnd = np.random.RandomState(args['seed'])
     x_train, y_train, x_val_id, y_val_id, x_val_ood, y_val_ood = get_tableshift_dataset(args['dataset_path'] , args['dataset_name'])
@@ -103,14 +105,19 @@ if __name__ == '__main__':
 
     # cache ood preds
     model_pool.val_ood_pred_probs = model_pool.get_individual_probabilities(x_val_ood)
+    model_pool.val_ood_pred_probs = model_pool.val_ood_pred_probs.astype(np.float16)
+    del x_val_ood
+    gc.collect()
 
     # 1. Apply Transformation
     x_train, x_val_id = make_noise(x_train, x_val_id, y_train,args['shift_feature_count'], prefix_name)
-    float16_min = np.finfo(np.float16).min  # Smallest (most negative) float16 value    
-    float16_max = np.finfo(np.float16).max  # Largest float16 value
+    x_train = x_train.astype(np.float16)
+    x_val_id = x_val_id.astype(np.float16)
 
     x_train = np.clip(x_train, float16_min, float16_max)
     x_val_id = np.clip(x_val_id, float16_min, float16_max)
+
+
 
     ### 2. Get Cluster dict
     all_clusters_dict = {}
@@ -120,28 +127,28 @@ if __name__ == '__main__':
     y_train_flipped = DataNoiseAdder.label_flip(y_train)
     y_val_flipped = DataNoiseAdder.label_flip(y_val_id)
 
+
     print("Start random search")
     for label_flip in [0, 1]:
         print(f'label_flip:{label_flip}')
 
         for method in tqdm.tqdm(['train', 'val_id']):
-            fitness_df = pd.DataFrame()       
-            clusters_dict = all_clusters_dict[f'{method}_{prefix_name}']
-
             print(f'method:{method}')
-            # make preds
-            if method == 'train':
-                model_pool_pred_probs = model_pool.get_individual_probabilities(x_train)
-                model_pool_preds = model_pool_pred_probs.argmax(axis=-1)
-            else:
-                model_pool_pred_probs = model_pool.get_individual_probabilities(x_val_id)
-                model_pool_preds = model_pool_pred_probs.argmax(axis=-1)
-
+            first_iteration = True
 
             precisions_df = pd.DataFrame()
             recalls_df = pd.DataFrame()
             aucs_df = pd.DataFrame()
-            fitness_df = pd.DataFrame()
+            clusters_dict = all_clusters_dict[f'{method}_{prefix_name}']
+
+            # make preds
+            if method == 'train':
+                model_pool_pred_probs = model_pool.get_individual_probabilities(x_train).astype(np.float16)
+                model_pool_preds = model_pool_pred_probs.argmax(axis=-1).astype(np.float16)
+            else:
+                model_pool_pred_probs = model_pool.get_individual_probabilities(x_val_id).astype(np.float16)
+                model_pool_preds = model_pool_pred_probs.argmax(axis=-1).astype(np.float16)
+
             for trial in tqdm.tqdm(range(args['ntrls'])):
                 tmp = {'generation': trial}
 
@@ -150,7 +157,9 @@ if __name__ == '__main__':
                 
                 # Get ensemble predictions
                 ood_preds, ood_pred_probs = get_ensemble_preds_from_models(model_pool.val_ood_pred_probs[indices])
-                
+                ood_preds = ood_preds.astype(np.float16)
+                ood_pred_probs = ood_pred_probs.astype(np.float16)
+
                 # Compute precision, recall, and AUC
                 if (label_flip == 0)&(method=='train'):
                     precision, recall, auc = get_precision_recall_auc(ood_pred_probs, y_val_ood, AUCTHRESHS)
@@ -158,6 +167,11 @@ if __name__ == '__main__':
                     recalls_df = pd.concat([recalls_df, pd.DataFrame(recall)], axis=1)
                     precisions_df = pd.concat([precisions_df, pd.DataFrame(precision)], axis=1)
                     aucs_df = pd.concat([aucs_df, pd.DataFrame(auc)], axis=1)
+
+                    precisions_df.to_csv(save_path +'/precisions_df.csv', index=False)
+                    recalls_df.to_csv(save_path +'/recalls_df.csv', index=False)
+                    aucs_df.to_csv(save_path +'/aucs_df.csv', index=False)
+
 
 
                 if method == 'train':
@@ -168,7 +182,7 @@ if __name__ == '__main__':
                 prefix = prefix_name + '_flipped' if label_flip else prefix_name
 
                 model_pred_probs = model_pool_pred_probs[indices]
-                model_preds = model_pred_probs.argmax(axis=-1)
+                model_preds = model_pred_probs.argmax(axis=-1).astype(np.float16)
 
                 # Get ensemble predictions and metrics
                 ensemble_preds, ensemble_pred_probs = get_ensemble_preds_from_models(model_pred_probs)
@@ -195,10 +209,11 @@ if __name__ == '__main__':
                     f'{prefix}_{method}_brier_score': np.mean(diversity.brier_score()),
                     f'{prefix}_{method}_ensemble_variance': np.mean(diversity.ensemble_variance())
                 })
-                
+                del metrics, diversity
+                gc.collect()
+
                 # Compute cluster metrics
                 tmp_cluster = compute_cluster_metrics(clusters_dict, ensemble_preds, model_preds, model_pred_probs, Y)
-
 
                 col_names = [prefix + '_' + x for x in tmp_cluster.columns]
                 col_names = [name.replace('_val_acc', '') for name in col_names]
@@ -209,12 +224,15 @@ if __name__ == '__main__':
                 del ensemble_preds, ensemble_pred_probs
                 gc.collect()
 
-                tmp = pd.concat([pd.DataFrame([tmp]), tmp_cluster], axis=1)
-                fitness_df = pd.concat([fitness_df, tmp])
+                # save fitness df
+                pd.concat([pd.DataFrame([tmp]), tmp_cluster], axis=1).to_csv(save_path +f'/{method}_{label_flip}_fitness_df.csv', mode='a', header=first_iteration, index=False)
+                first_iteration = False
+                del tmp, tmp_cluster
+                gc.collect()  
+                
+            if (label_flip == 0)&(method=='train'):
+                del precisions_df, recalls_df, aucs_df
+                gc.collect()
+              
 
-                if (label_flip == 0)&(method=='train'):
-                    precisions_df.to_csv(save_path +'/precisions_df.csv', index=False)
-                    recalls_df.to_csv(save_path +'/recalls_df.csv', index=False)
-                    aucs_df.to_csv(save_path +'/aucs_df.csv', index=False)
 
-                fitness_df.to_csv(save_path +f'/{method}_{label_flip}_fitness_df.csv', index=False)
