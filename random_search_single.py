@@ -18,6 +18,7 @@ from utils import compute_metrics_in_buckets, flatten_df, compute_cluster_metric
 from utils import get_categorical_and_float_features
 from utils import get_clusters_dict, make_noise
 from utils import create_directory_if_not_exists, save_dict_to_file
+from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 
 import tqdm
 import argparse
@@ -160,6 +161,15 @@ if __name__ == '__main__':
                 ood_preds = ood_preds.astype(np.float16)
                 ood_pred_probs = ood_pred_probs.astype(np.float16)
 
+                ood_accuracy = accuracy_score(y_val_ood, ood_preds)
+                ood_precision = precision_score(y_val_ood, ood_preds)
+                ood_recall = recall_score(y_val_ood, ood_preds)
+
+                try:
+                    ood_auc = roc_auc_score(y_val_ood, ood_pred_probs[:,1])
+                except:
+                    ood_auc = np.nan
+
                 # Compute precision, recall, and AUC
                 if (label_flip == 0)&(method=='train'):
                     precision, recall, auc = get_precision_recall_auc(ood_pred_probs, y_val_ood, AUCTHRESHS)
@@ -191,6 +201,10 @@ if __name__ == '__main__':
                 
                 # Collect metrics in the `tmp` dict (specific to this prefix)
                 tmp.update({
+                    'ood_acc': ood_accuracy,
+                    'ood_auc': ood_auc,
+                    'ood_prec': ood_precision,
+                    'ood_rec': ood_recall,
                     f'{prefix}_{method}_acc': metrics.accuracy(),
                     f'{prefix}_{method}_auc': metrics.auc(),
                     f'{prefix}_{method}_prec': metrics.precision(),
@@ -229,7 +243,7 @@ if __name__ == '__main__':
                 first_iteration = False
                 del tmp, tmp_cluster
                 gc.collect()  
-                
+
             if (label_flip == 0)&(method=='train'):
                 del precisions_df, recalls_df, aucs_df
                 gc.collect()
