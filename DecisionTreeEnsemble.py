@@ -71,7 +71,8 @@ class DecisionTreeEnsemble:
             clf = DecisionTreeClassifier(
                 max_depth=self.max_depth,
                 min_samples_leaf=self.min_samples_leaf,
-                random_state=random_state
+                random_state=random_state,
+                class_weight='balanced'
             )
             clf.fit(X_subset, y_subset)
             # Store the trained classifier and corresponding feature/sample indices

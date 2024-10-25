@@ -210,7 +210,7 @@ def get_precision_recall_auc(ensemble_pred_probs, y_val_ood, AUCTHRESHS):
     accus = [np.mean((ensemble_preds==y_val_ood)[(ensemble_preds_std<=s)]) for s in std_threshs]
     tps = [np.sum(((y_val_ood)*(ensemble_preds==y_val_ood))[(ensemble_preds_std<=s)]) for s in std_threshs]  # correct and positive
     fps = [np.sum(((ensemble_preds)*(ensemble_preds!=y_val_ood))[(ensemble_preds_std<=s)]) for s in std_threshs]  # incorrect and predicted positive
-    AUC = auprc_threshs(ensemble_pred_probs.max(axis=1), y_val_ood, AUCTHRESHS)
+    AUC = auprc_threshs(ensemble_preds_mean, y_val_ood, AUCTHRESHS)
 
     pos = np.sum(y_val_ood)
     recall = [tp/pos for tp in tps]
