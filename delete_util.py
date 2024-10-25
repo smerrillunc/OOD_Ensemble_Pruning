@@ -2,8 +2,7 @@
 import os
 import shutil
 from tqdm import tqdm
-
-warnings.filterwarnings('ignore')
+import argparse
 
 def delete_folder_contents(folder_path):
     """
