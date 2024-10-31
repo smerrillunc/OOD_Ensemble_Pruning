@@ -106,7 +106,7 @@ if __name__ == '__main__':
     dbscan_indices = detector.dbscan_outliers(eps=0.5, min_samples=5)
     logistic_indices = detector.logistic_regression_outliers()
 
-    np.savez(save_path + 'outliers.npz', 
+    np.savez(save_path + '/outliers.npz', 
          freq_indices=freq_indices, 
          iso_forest_indices=iso_forest_indices,
          lof_indices=lof_indices,
