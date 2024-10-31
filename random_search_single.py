@@ -72,17 +72,16 @@ if __name__ == '__main__':
 
     rnd = np.random.RandomState(args['seed'])
     x_train, y_train, x_val_id, y_val_id, x_val_ood, y_val_ood = get_tableshift_dataset(args['dataset_path'] , args['dataset_name'])
-    sample_indices_train = rnd.choice(x_train.shape[0], size=min(x_train.shape[0], args['sample_size']), replace=True)
+    sample_indices_train = rnd.choice(x_train.shape[0], size=min(x_train.shape[0], args['sample_size']), replace=False)
     x_train = x_train[sample_indices_train]
     y_train = y_train[sample_indices_train]
 
-    sample_indices_val = rnd.choice(x_val_id.shape[0], size=min(x_val_id.shape[0], args['sample_size']), replace=True)
+    sample_indices_val = rnd.choice(x_val_id.shape[0], size=min(x_val_id.shape[0], args['sample_size']), replace=False)
     x_val_id = x_val_id[sample_indices_val]
     y_val_id = y_val_id[sample_indices_val]
 
-    sample_indices_ood = rnd.choice(x_val_ood.shape[0], size=min(x_val_ood.shape[0], args['sample_size']), replace=True)
-    x_val_ood = x_val_ood[sample_indices_ood]
-    y_val_ood = y_val_ood[sample_indices_ood]
+    x_val_ood = x_val_ood
+    y_val_ood = y_val_ood
 
     assert(len(np.unique(y_train)) == 2)
     assert(len(np.unique(y_val_id)) == 2)
