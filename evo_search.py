@@ -35,8 +35,12 @@ warnings.filterwarnings('ignore')
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Read file content.')
 
-    parser.add_argument("-n", "--ntrls", type=int, default=100000, help='Number of random search trials')
+    parser.add_argument("-p", "--population_size", type=int, default=1000, help='Number of random search trials')
     parser.add_argument("-e", "--ensemble_size", type=int, default=100, help='Size of ensemble to search for')
+    parser.add_argument("-g", "--generations", type=int, default=100000, help='Size of ensemble to search for')
+    parser.add_argument("-el", "--elitism", type=int, default=200, help='Size of ensemble to search for')
+    parser.add_argument("-t", "--tournament_size", type=int, default=500, help='Size of ensemble to search for')
+    parser.add_argument("-mr", "--mutation_rate", type=float, default=0.1, help='Size of ensemble to search for')
 
     parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Reliable Machine Learning/tableshift_datasets", help='Path to dataset')
     parser.add_argument("-dn", "--dataset_name", type=str, default="college_scorecard", help='Dataset Name')
@@ -77,12 +81,12 @@ if __name__ == '__main__':
     model_pool.val_ood_pred_probs = model_pool.get_individual_probabilities(x_val_ood)
 
     # Hyperparameters
-    POPULATION_SIZE = 50*100
-    ENSEMBLE_SIZE = 100
-    NUM_GENERATIONS = 100*100
-    TOURNAMENT_SIZE = 5*100
-    MUTATION_RATE = 0.01
-    ELITISM_SIZE = 2*100
+    POPULATION_SIZE = args['population_size']
+    ENSEMBLE_SIZE = args['ensemble_size']
+    NUM_GENERATIONS = args['generations']
+    TOURNAMENT_SIZE = args['tournament_size']
+    MUTATION_RATE = args['mutation_rate']
+    ELITISM_SIZE = args['elitism']
 
     # Fitness function to evaluate OOD accuracy
     def calculate_ood_accuracy(ensemble):
