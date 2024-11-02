@@ -118,29 +118,28 @@ if __name__ == '__main__':
             index_to_mutate = random.randint(0, ENSEMBLE_SIZE - 1)
             ensemble[index_to_mutate] = random.randint(0, pool_size - 1)
         return ensemble
-
+        
     # Evolutionary algorithm
     def evolutionary_algorithm(pool_size):
         # Initialize population
         population = initialize_population(pool_size, ENSEMBLE_SIZE, POPULATION_SIZE)
         
-        # Open the CSV file in append mode
-        with open(save_path + "/all_ensembles_log.csv", mode="w", newline="") as file:
+        # Open the CSV file in write mode to set up headers
+        with open("best_ensembles_log.csv", mode="w", newline="") as file:
             writer = csv.writer(file)
-            # Write the header once
-            writer.writerow(["Generation", "Ensemble_Indices", "OOD_Accuracy"])
+            # Write the header
+            writer.writerow(["Generation", "Best_Ensemble_Indices", "OOD_Accuracy"])
 
-            for generation in tqdm.tqdm(range(NUM_GENERATIONS)):
+            for generation in range(NUM_GENERATIONS):
                 # Calculate fitness scores for the current generation
                 scores = [calculate_ood_accuracy(ensemble) for ensemble in population]
                 
-                # Log each ensemble with its score in the current generation
-                for ensemble, score in zip(population, scores):
-                    # Write each ensemble with its score to the file
-                    writer.writerow([generation, ensemble[:], score])
-                
-                # Print the best score for the current generation
+                # Find the best ensemble and its score
                 best_score = max(scores)
+                best_ensemble = population[scores.index(best_score)]
+                
+                # Log the best ensemble and its score for the current generation
+                writer.writerow([generation, best_ensemble[:], best_score])
                 print(f"Generation {generation}, Best Score: {best_score}")
 
                 # Sort population by fitness (descending)
@@ -168,6 +167,7 @@ if __name__ == '__main__':
         best_score = max(final_scores)
 
         return best_ensemble, best_score
+
 
     # Run the algorithm
     best_ensemble, best_score = evolutionary_algorithm(pool_size=model_pool.num_classifiers)
