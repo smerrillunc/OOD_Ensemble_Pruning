@@ -6,8 +6,7 @@ import gc
 import numbers
 
 class DecisionTreeEnsemble:
-    def __init__(self, num_classifiers=10000, feature_fraction=0.5, data_fraction=0.8, 
-                 max_depth=10, min_samples_leaf=4, random_state=0):
+    def __init__(self, num_classifiers=10000,  max_depth=10, min_samples_leaf=4, feature_fraction=0.8, data_fraction=0.8,random_state=0):
         """
         Initialize the ensemble of decision tree classifiers.
         
@@ -19,29 +18,15 @@ class DecisionTreeEnsemble:
         :param random_state: Seed for reproducibility (optional).
         """
         self.num_classifiers = num_classifiers
-        self.feature_fraction = feature_fraction
-        self.data_fraction = data_fraction
         self.max_depth = max_depth
         self.min_samples_leaf = min_samples_leaf
+        self.feature_fraction = feature_fraction
+        self.data_fraction = data_fraction
         self.random_state = random_state
         self.classifiers = []
         #self.feature_subsets = []
         #self.data_subsets = []
         
-    def _get_random_subsets(self, X):
-        """
-        Generate random subsets of features and samples.
-        
-        :param X: Feature matrix (2D array).
-        :return: A tuple (feature_indices, sample_indices).
-        """
-        n_features = int(X.shape[1] * self.feature_fraction)
-        n_samples = int(X.shape[0] * self.data_fraction)
-        
-        feature_indices = np.random.choice(X.shape[1], n_features, replace=False)
-        sample_indices = np.random.choice(X.shape[0], n_samples, replace=False)
-        
-        return feature_indices, sample_indices
 
     def train(self, X, y):
         """
@@ -50,14 +35,18 @@ class DecisionTreeEnsemble:
         :param X: Feature matrix (2D array).
         :param y: Target vector (1D array).
         """
-        n_features = int(X.shape[1] * self.feature_fraction)
-        n_samples = int(X.shape[0] * self.data_fraction)
 
         for i in tqdm.tqdm(range(self.num_classifiers)):
             # Get random subsets of features and samples
     
             random_state = (self.random_state + i) if self.random_state else i
             random_instance = DecisionTreeEnsemble.check_random_state(random_state)
+
+            feature_fraction = random_instance.uniform(0.1, self.feature_fraction)
+            data_fraction = random_instance.uniform(0.1, self.data_fraction)
+
+            n_features = int(X.shape[1] * feature_fraction)
+            n_samples = int(X.shape[0] * data_fraction)
 
             feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
             sample_indices = random_instance.choice(X.shape[0], n_samples, replace=False)
@@ -95,10 +84,13 @@ class DecisionTreeEnsemble:
         """
         # Store predictions for each classifier
         all_predictions = np.zeros((X.shape[0], len(self.classifiers)))
-        n_features = int(X.shape[1] * self.feature_fraction)
-
+        
         for i, clf in enumerate(self.classifiers):
             random_instance = DecisionTreeEnsemble.check_random_state(clf.random_state)
+
+            feature_fraction = random_instance.uniform(0.1, self.feature_fraction)
+            n_features = int(X.shape[1] * feature_fraction)
+
             feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
             all_predictions[:, i] = clf.predict(X[:, feature_indices])
 
@@ -118,10 +110,11 @@ class DecisionTreeEnsemble:
         """
         # Store predictions for each classifier
         all_predictions = np.zeros((X.shape[0], len(self.classifiers)))
-        n_features = int(X.shape[1] * self.feature_fraction)
 
         for i, clf in enumerate(self.classifiers):
             random_instance = DecisionTreeEnsemble.check_random_state(clf.random_state)
+            feature_fraction = random_instance.uniform(0.1, self.feature_fraction)
+            n_features = int(X.shape[1] * feature_fraction)
             feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
 
             all_predictions[:, i] = clf.predict(X[:, feature_indices])
@@ -143,10 +136,11 @@ class DecisionTreeEnsemble:
         """
         # Store predictions for each classifier
         all_predictions = np.zeros((X.shape[0], len(self.classifiers)))
-        n_features = int(X.shape[1] * self.feature_fraction)
 
         for i, clf in enumerate(self.classifiers):
             random_instance = DecisionTreeEnsemble.check_random_state(clf.random_state)
+            feature_fraction = random_instance.uniform(0.1, self.feature_fraction)
+            n_features = int(X.shape[1] * feature_fraction)
             feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
             all_predictions[:, i] = clf.predict(X[:, feature_indices])
 
@@ -162,10 +156,11 @@ class DecisionTreeEnsemble:
                  (n_samples, n_classes).
         """
         all_probabilities = []
-        n_features = int(X.shape[1] * self.feature_fraction)
 
         for i, clf in enumerate(self.classifiers):
             random_instance = DecisionTreeEnsemble.check_random_state(clf.random_state)
+            feature_fraction = random_instance.uniform(0.1, self.feature_fraction)
+            n_features = int(X.shape[1] * feature_fraction)
             feature_indices = random_instance.choice(X.shape[1], n_features, replace=False)
             # Predict probabilities for each sample
             probabilities = clf.predict_proba(X[:, feature_indices])

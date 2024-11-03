@@ -73,12 +73,12 @@ if __name__ == '__main__':
     print('Building and Training Model Pool')
 
 
-    model_pool = DecisionTreeEnsemble(args['num_classifiers'], 
-                                      args['feature_fraction'],
-                                      args['data_fraction'],
-                                      args['max_depth'],
-                                      args['min_samples_leaf'],
-                                      args['random_state'])
+    model_pool = DecisionTreeEnsemble(num_classifiers=args['num_classifiers'], 
+                                      feature_fraction=args['feature_fraction'],
+                                      data_fraction=args['data_fraction'],
+                                      max_depth=args['max_depth'],
+                                      min_samples_leaf=args['min_samples_leaf'],
+                                      random_state=args['random_state'])
 
     model_pool.train(x_train, y_train)
     print('saving_model_pool to ')
