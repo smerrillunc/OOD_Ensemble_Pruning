@@ -35,7 +35,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Read file content.')
 
     parser.add_argument("-n", "--ntrls", type=int, default=100000, help='Number of random search trials')
-    parser.add_argument("-e", "--ensemble_size", type=int, default=100, help='Size of ensemble to search for')
+    parser.add_argument("-e", "--ensemble_size", type=int, default=None, help='Size of ensemble to search for')
     parser.add_argument("-mps", "--num_classifiers", type=int, default=10000, help='Model Pool Size')
     parser.add_argument("-ff", "--feature_fraction", type=float, default=0.5, help='Fraction of features to use for training')
     parser.add_argument("-df", "--data_fraction", type=float, default=0.6, help='Fraction of data to use for training')
