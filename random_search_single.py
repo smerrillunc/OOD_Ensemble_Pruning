@@ -153,8 +153,13 @@ if __name__ == '__main__':
                 tmp = {'generation': trial}
 
                 rnd = np.random.RandomState(trial)
-                indices = rnd.choice(model_pool.num_classifiers, size=args['ensemble_size'], replace=True)
-                
+
+                if args['ensemble_size']:
+                    indices = rnd.choice(model_pool.num_classifiers, size=args['ensemble_size'], replace=True)
+                else:
+                    ensemble_size = rnd.randint(10, model_pool.num_classifiers*0.1)
+                    indices = rnd.choice(model_pool.num_classifiers, size=ensemble_size, replace=True)
+
                 # Get ensemble predictions
                 ood_preds, ood_pred_probs = get_ensemble_preds_from_models(model_pool.val_ood_pred_probs[indices])
                 ood_preds = ood_preds.astype(np.float16)
