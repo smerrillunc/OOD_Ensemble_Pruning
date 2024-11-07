@@ -41,7 +41,8 @@ if __name__ == '__main__':
 
     parser.add_argument("-dp", "--dataset_path", type=str, default="/Users/scottmerrill/Documents/UNC/Reliable Machine Learning/tableshift_datasets", help='Path to dataset')
     parser.add_argument("-dn", "--dataset_name", type=str, default="college_scorecard", help='Dataset Name')
-    
+    parser.add_argument("--indices_file", type=str, default=None, help="Indices to test")
+
     parser.add_argument("--model_pool_path", type=str, default='/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/data/college_scorecard/model_pool.pkl', help="Path to model pool pickle file")
     parser.add_argument("-sp", "--save_path", type=str, default='/Users/scottmerrill/Documents/UNC/Research/OOD-Ensembles/data', help='save path')
     parser.add_argument("-sd", "--seed", type=int, default=0, help="random seed")
@@ -125,6 +126,15 @@ if __name__ == '__main__':
     recalls_df = pd.DataFrame()
     aucs_df = pd.DataFrame()
 
+
+    if args['indices_file']:
+        print('loading indices file')
+        # will search for these indices
+        tmp = pd.read_csv(args['indices_file'])
+        indices_list = tmp.drop_duplicates(subset=['Best_Ensemble_Indices'])['Best_Ensemble_Indices'].values
+        args['ntrls'] = len(indicies)
+
+
     model_pool_pred_probs = model_pool.get_individual_probabilities(x_train).astype(np.float16)
     first_iteration = True
     for trial in tqdm.tqdm(range(args['ntrls'])):
@@ -132,8 +142,15 @@ if __name__ == '__main__':
 
         for prefix, outliers in outlier_sets:
             rnd = np.random.RandomState(trial)
-            indices = rnd.choice(model_pool.num_classifiers, size=args['ensemble_size'], replace=True)
             
+            if args['ensemble_size']:
+                indices = rnd.choice(model_pool.num_classifiers, size=args['ensemble_size'], replace=True)
+            elif args['indices_file']:
+                indices = indices_list[trial]
+            else:
+                ensemble_size = rnd.randint(10, model_pool.num_classifiers*0.1)
+                indices = rnd.choice(model_pool.num_classifiers, size=ensemble_size, replace=True)            
+
             # Get ensemble predictions
             ood_preds, ood_pred_probs = get_ensemble_preds_from_models(model_pool.val_ood_pred_probs[indices])
             ood_preds = ood_preds.astype(np.float16)
